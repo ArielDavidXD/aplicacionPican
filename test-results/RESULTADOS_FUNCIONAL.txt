@@ -1,0 +1,26 @@
+INFORME FUNCIONAL POSTGRESQL · ETAPA 4.14 · FASE 4
+
+APROBADA | FUN-01
+  Esperado: UUID, códigos y baja lógica de UEB/nave/unidad con JDBC
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-02
+  Esperado: Parte de nave se consulta en análisis con su cantidad exacta
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-03
+  Esperado: Producción de carne y consolidado se consultan por período
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-04
+  Esperado: Referencias históricas y metas oficiales disponibles solo para lectura
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-05
+  Esperado: Informe: fuente, decisión y entrega con transiciones de estado
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-06
+  Esperado: Regla: no se puede entregar un informe no aprobado
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-07
+  Esperado: Revisión posterior conserva el informe anterior y su decisión
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | FUN-08
+  Esperado: Persistencia del informe tras reconstruir AppContext
+  Obtenido: Se cumplió el resultado esperado

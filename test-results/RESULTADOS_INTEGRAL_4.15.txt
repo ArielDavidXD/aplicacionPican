@@ -1,0 +1,22 @@
+VALIDACIÓN INTEGRAL POSTGRESQL · ETAPA 4.15 · FASE 1
+
+APROBADA | INT-01 | Arranque POSTGRES y migraciones aplicadas | Se cumplió el resultado esperado
+APROBADA | INT-02 | Inicio de sesión con cuenta creada en la prueba | Se cumplió el resultado esperado
+APROBADA | INT-03 | Gestión de UEB | Se cumplió el resultado esperado
+APROBADA | INT-04 | Gestión de naves | Se cumplió el resultado esperado
+APROBADA | INT-05 | Gestión de unidades asociadas | Se cumplió el resultado esperado
+APROBADA | INT-06 | Gestión de productos | Se cumplió el resultado esperado
+APROBADA | INT-07 | Gestión de destinos | Se cumplió el resultado esperado
+APROBADA | INT-08 | Relaciones producto-destino | Se cumplió el resultado esperado
+APROBADA | INT-09 | Registro de producción de huevos y consulta analítica | Se cumplió el resultado esperado
+APROBADA | INT-10 | Registro de producción de carne | Se cumplió el resultado esperado
+APROBADA | INT-11 | Consolidación de la UEB | Se cumplió el resultado esperado
+APROBADA | INT-12 | Emisión de vales de entrega | Se cumplió el resultado esperado
+APROBADA | INT-13 | Recepciones y transición del vale | Se cumplió el resultado esperado
+APROBADA | INT-14 | Incidencias desde recepción no conforme | Se cumplió el resultado esperado
+APROBADA | INT-15 | Anulación de vales | Se cumplió el resultado esperado
+APROBADA | INT-16 | Análisis e indicadores | Se cumplió el resultado esperado
+APROBADA | INT-17 | Informes, fuentes, decisión y entrega | Se cumplió el resultado esperado
+APROBADA | INT-18 | Gestión de usuarios y catálogo de roles | Se cumplió el resultado esperado
+APROBADA | INT-19 | Persistencia tras reconstruir AppContext (reinicio simulado) | Se cumplió el resultado esperado
+APROBADA | INT-20 | UUID, fechas, precisión decimal y baja lógica (activa=false) | Se cumplió el resultado esperado

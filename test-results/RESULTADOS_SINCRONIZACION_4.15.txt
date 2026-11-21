@@ -1,0 +1,16 @@
+SINCRONIZACIÓN UEB ↔ CENTRAL · ETAPA 4.15
+
+APROBADA | SIN-01 | Tres contextos aislados con autenticación por rol | Se cumplió el resultado esperado
+APROBADA | SIN-02 | Datos operativos sin vínculo usuario↔UEB | Se cumplió el resultado esperado
+APROBADA | SIN-03 | Generación de ZIP con manifiesto e integridad | Se cumplió el resultado esperado
+APROBADA | SIN-04 | Validación del paquete en la central | Se cumplió el resultado esperado
+APROBADA | SIN-05 | Importación transaccional en la central | Se cumplió el resultado esperado
+APROBADA | SIN-06 | Idempotencia ante reimportación del mismo paquete | Se cumplió el resultado esperado
+APROBADA | SIN-07 | Autorización real en servicios, no solo en menús | Se cumplió el resultado esperado
+APROBADA | SIN-08 | Rechazo de corrupción del contenido | Se cumplió el resultado esperado
+APROBADA | SIN-09 | Rechazo de versión incompatible y destino incorrecto | Se cumplió el resultado esperado
+APROBADA | SIN-10 | Rechazo de Zip Slip y archivos incompletos | Se cumplió el resultado esperado
+APROBADA | SIN-11 | Conflictos detectados sin resolución automática | Se cumplió el resultado esperado
+APROBADA | SIN-12 | Segunda UEB sin mezclar orígenes | Se cumplió el resultado esperado
+APROBADA | SIN-13 | Confirmación de ida y vuelta y cierre del lote | Se cumplió el resultado esperado
+APROBADA | SIN-14 | MEMORY rechaza la sincronización sin simularla | Se cumplió el resultado esperado

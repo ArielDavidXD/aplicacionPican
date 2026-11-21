@@ -1,0 +1,24 @@
+# Copiar a config/pican.properties y ajustar. NUNCA guardar la contraseña aquí.
+# Prioridad: propiedades -D > variables de entorno > este archivo > valores por defecto.
+
+# Modo de persistencia: memory (demostración) o postgresql (persistencia real).
+pican.persistence=postgresql
+
+# Instancia de la arquitectura empresarial aprobada: LOCAL o CENTRAL.
+pican.db.mode=LOCAL
+
+# Host, puerto y base. Alternativamente se puede definir pican.db.url completa.
+pican.db.host=127.0.0.1
+pican.db.port=5432
+pican.db.name=pican
+
+# Usuario. La contraseña se entrega por variable de entorno PICAN_DB_PASSWORD
+# o por propiedad de sistema -Dpican.db.password=... (no escribirla en este archivo).
+pican.db.user=pican
+
+# Ejecutar migraciones pendientes al iniciar (recomendado: true).
+pican.db.migrate=true
+
+# Directorio de migraciones: MigrationRunner solo lee la propiedad de sistema.
+# Para cambiarlo, iniciar con: java -Dpican.migrations.dir=sql/migrations ...
+# NO se lee desde este archivo.

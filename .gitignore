@@ -1,0 +1,142 @@
+# ==========================================
+# PICAN - Java / PostgreSQL
+# ==========================================
+
+# Compilación Java
+*.class
+*.jar
+*.war
+*.ear
+out/
+target/
+build/
+bin/
+
+# ==========================================
+# IDE y editores
+# ==========================================
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# NetBeans
+/nbproject/private/
+nbbuild/
+dist/
+nbdist/
+
+# Visual Studio Code
+.vscode/
+
+# ==========================================
+# PostgreSQL y bases de datos locales
+# ==========================================
+
+# Datos físicos de PostgreSQL
+pg_data/
+postgres_data/
+database/data/
+db_data/
+
+# Archivos de bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos temporales de PostgreSQL
+postmaster.pid
+postmaster.opts
+pg_stat_tmp/
+
+# ==========================================
+# Copias de seguridad
+# ==========================================
+
+*.dump
+*.backup
+*.bak
+*.sql.gz
+*.zip
+*.7z
+*.rar
+
+# Directorios de copias
+backups/
+backup/
+copias_seguridad/
+restauraciones/
+
+# ==========================================
+# Logs y diagnósticos
+# ==========================================
+
+*.log
+logs/
+log/
+hs_err_pid*
+replay_pid*
+
+# ==========================================
+# Archivos temporales
+# ==========================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+temp/
+tmp/
+
+# ==========================================
+# Configuración local y credenciales
+# ==========================================
+
+.env
+.env.*
+!.env.example
+!.env.template
+
+application-local.properties
+config-local.properties
+database-local.properties
+
+# No subir archivos con credenciales locales
+secrets/
+credentials/
+*.secret
+
+# ==========================================
+# Pruebas y resultados generados
+# ==========================================
+
+test-output/
+surefire-reports/
+failsafe-reports/
+coverage/
+jacoco/
+*.exec
+
+# ==========================================
+# Archivos del sistema operativo
+# ==========================================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==========================================
+# Archivos de intercambio y temporales
+# ==========================================
+
+*.orig
+*.rej
+*.patch.tmp

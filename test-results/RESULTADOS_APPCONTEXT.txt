@@ -1,0 +1,38 @@
+INFORME DE INTEGRACION DE APPCONTEXT · ETAPA 4.14
+
+APROBADA | CTX-MEM-01
+  Esperado: AppContext en modo memoria sin gestor JDBC
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-MEM-02
+  Esperado: Los 20 repositorios son implementaciones Memory
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-MEM-03
+  Esperado: DemoDataInitializer sigue funcionando en memoria
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-MEM-04
+  Esperado: CRUD de catálogo y servicios en memoria
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-01
+  Esperado: AppContext en modo PostgreSQL con gestor JDBC y transaccional
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-02
+  Esperado: Los 20 repositorios son implementaciones Postgres
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-03
+  Esperado: No se insertan datos de demostración en PostgreSQL
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-04
+  Esperado: Referencias históricas oficiales cargadas de forma idempotente
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-05
+  Esperado: Cuenta administrativa inicial disponible
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-06
+  Esperado: Alta y consulta de UEB mediante servicios + repositorio JDBC
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-07
+  Esperado: Persistencia tras reconstruir AppContext (reinicio simulado)
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | CTX-PG-08
+  Esperado: Sin fallback silencioso: PostgreSQL inaccesible produce error
+  Obtenido: Se cumplió el resultado esperado

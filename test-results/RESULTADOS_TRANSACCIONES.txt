@@ -1,0 +1,33 @@
+INFORME DE PRUEBAS TRANSACCIONALES · ETAPA 4.14 · FASE 1
+Base: pican_regresion_415_test
+
+APROBADA | TX-01 · Transacción exitosa guarda los cambios
+  Esperado: La UEB insertada dentro de la transacción debe existir tras el commit
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-02 · Error provoca rollback
+  Esperado: La UEB insertada no debe existir tras una excepción de negocio
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-03 · Inserción seguida de excepción sin datos parciales
+  Esperado: No deben quedar UEB ni nave de la transacción fallida
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-04 · Dos operaciones relacionadas se confirman juntas
+  Esperado: UEB y nave deben existir tras el commit
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-05 · Fallo en la segunda operación revierte la primera
+  Esperado: La UEB no debe existir cuando la nave falla por FK inválida
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-06 · Conexiones se liberan correctamente
+  Esperado: Sin conexión enlazada y sin crecimiento de backend tras 10 transacciones
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-07 · Transacción fallida no deja conexiones inutilizables
+  Esperado: SELECT 1 posterior funciona y el backend vuelve al nivel anterior
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-08 · Operación posterior funciona tras rollback
+  Esperado: Se puede guardar y consultar una UEB después de un rollback
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-09 · Repositorios usan la conexión transaccional
+  Esperado: La fila es visible en la conexión activa y no en otra hasta el commit
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | TX-10 · Transacciones anidadas comparten conexión
+  Esperado: La transacción interna reutiliza la conexión y participa del commit/rollback
+  Obtenido: Se cumplió el resultado esperado

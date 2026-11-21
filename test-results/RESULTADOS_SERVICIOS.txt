@@ -1,0 +1,17 @@
+INFORME DE SERVICIOS TRANSACCIONALES · ETAPA 4.14 · FASE 3
+
+APROBADA | SRV-01
+  Esperado: Recepción NO_CONFORME confirma vale, recepción e incidencia juntos
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | SRV-02
+  Esperado: Fallo en el segundo write revierte el cambio de estado del vale
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | SRV-03
+  Esperado: Cerrar la última incidencia cierra el vale (coherencia de estados)
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | SRV-04
+  Esperado: Regla de negocio: una incidencia cerrada no se puede cerrar dos veces
+  Obtenido: Se cumplió el resultado esperado
+APROBADA | SRV-05
+  Esperado: UsuarioService participa en la transacción activa (rol + usuario)
+  Obtenido: Se cumplió el resultado esperado
