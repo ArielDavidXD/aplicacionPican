@@ -3,15 +3,17 @@ package cu.pican.sync;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -58,12 +60,15 @@ public final class SyncArchivo {
         if (total > LIMITE_TOTAL) {
             throw new SyncException("El paquete supera el límite de 20 MB.");
         }
+        Path absoluto = destino.toAbsolutePath().normalize();
+        Path padre = absoluto.getParent();
+        if (padre == null || !Files.isDirectory(padre)) {
+            throw new SyncException("El directorio de destino no existe: " + padre);
+        }
+        Path temporal = padre.resolve("." + absoluto.getFileName().toString()
+                + ".tmp-" + UUID.randomUUID());
         try {
-            Path padre = destino.toAbsolutePath().getParent();
-            if (padre != null && !Files.isDirectory(padre)) {
-                throw new SyncException("El directorio de destino no existe: " + padre);
-            }
-            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(destino))) {
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(temporal))) {
                 for (Map.Entry<String, byte[]> entrada : entradas.entrySet()) {
                     ZipEntry entry = new ZipEntry(entrada.getKey());
                     zip.putNextEntry(entry);
@@ -71,8 +76,30 @@ public final class SyncArchivo {
                     zip.closeEntry();
                 }
             }
+            try {
+                Files.move(temporal, absoluto, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ex) {
+                Files.move(temporal, absoluto, StandardCopyOption.REPLACE_EXISTING);
+            }
+            // Verificación de relectura: el archivo final debe contener exactamente
+            // las entradas escritas, sin truncamientos ni corrupción en el medio USB.
+            LinkedHashMap<String, byte[]> releido = leer(absoluto, entradas.keySet());
+            for (Map.Entry<String, byte[]> entrada : entradas.entrySet()) {
+                byte[] valor = releido.get(entrada.getKey());
+                if (valor == null || !MessageDigest.isEqual(valor, entrada.getValue())) {
+                    throw new SyncException("Verificación de escritura fallida: el archivo "
+                            + "escrito no coincide con el contenido del paquete.");
+                }
+            }
         } catch (IOException ex) {
             throw new SyncException("No se pudo escribir el paquete en " + destino, ex);
+        } finally {
+            try {
+                Files.deleteIfExists(temporal);
+            } catch (IOException ignorado) {
+                // El temporal no oculta el resultado de la operación.
+            }
         }
     }
 
@@ -143,10 +170,11 @@ public final class SyncArchivo {
     private static void validarNombre(String nombre) {
         if (nombre == null || nombre.isEmpty() || nombre.length() > 120
                 || nombre.contains("..") || nombre.contains("/") || nombre.contains("\\")
-                || nombre.startsWith("/") || !Arrays.asList("MANIFEST.json", "REGISTROS.json",
-                        "CONFIRMACION.json").contains(nombre)) {
+                || nombre.startsWith("/") || nombre.startsWith("\\")) {
             throw new SyncException("Nombre de archivo interno no permitido: " + nombre);
         }
+        // La lista de nombres esperados la fija cada tipo de paquete al leerlo;
+        // aquí solo se exige que el nombre sea estructuralmente seguro.
     }
 
     private static void validarRuta(Path ruta) {

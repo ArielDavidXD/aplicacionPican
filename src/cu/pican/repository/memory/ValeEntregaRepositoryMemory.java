@@ -5,13 +5,17 @@ import cu.pican.repository.ValeEntregaRepository;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class ValeEntregaRepositoryMemory extends InMemoryRepository<ValeEntrega, UUID> implements ValeEntregaRepository {
+
+    private final Map<UUID, Integer> secuencias = new HashMap<>();
 
     @Override
     protected UUID getId(ValeEntrega entity) {
@@ -73,6 +77,13 @@ public class ValeEntregaRepositoryMemory extends InMemoryRepository<ValeEntrega,
         return store.values().stream()
                 .filter(v -> Objects.equals(estado, v.getEstado()))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public synchronized int siguienteSecuencia(UUID idUEB) {
+        int actual = secuencias.getOrDefault(idUEB, 0) + 1;
+        secuencias.put(idUEB, actual);
+        return actual;
     }
 
     private boolean enPeriodo(LocalDateTime fecha, LocalDateTime desde, LocalDateTime hasta) {

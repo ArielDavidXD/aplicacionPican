@@ -28,4 +28,12 @@ public class ParteNaveRepositoryMemory extends InMemoryRepository<ParteNave, UUI
                 .filter(p -> Objects.equals(p.getFechaProduccion(), fechaProduccion))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<ParteNave> findByNaveYFecha(UUID idNave, LocalDate fechaProduccion) {
+        return store.values().stream()
+                .filter(p -> Objects.equals(p.getIdNave(), idNave)
+                        && Objects.equals(p.getFechaProduccion(), fechaProduccion))
+                .collect(Collectors.toList());
+    }
 }

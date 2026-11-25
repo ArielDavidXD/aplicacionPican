@@ -8,4 +8,5 @@ import java.util.UUID;
 public interface ParteNaveRepository extends Repository<ParteNave, UUID> {
     List<ParteNave> findByNave(UUID idNave);
     List<ParteNave> findByFecha(LocalDate fechaProduccion);
+    List<ParteNave> findByNaveYFecha(UUID idNave, LocalDate fechaProduccion);
 }

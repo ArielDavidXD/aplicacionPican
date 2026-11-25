@@ -1,6 +1,8 @@
 package cu.pican.view.modules;
 
 import cu.pican.app.AppContext;
+import cu.pican.export.ExportadorPdf;
+import cu.pican.export.ExportadorXlsx;
 import cu.pican.model.ComparacionMeta;
 import cu.pican.model.IndicadorHistorico;
 import cu.pican.model.MetaEstrategica;
@@ -18,18 +20,23 @@ import cu.pican.view.components.ModuleHeader;
 import cu.pican.view.components.UITheme;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Vector;
 import java.util.stream.Collectors;
 
 import javax.swing.BoxLayout;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -44,6 +51,7 @@ import javax.swing.ListSelectionModel;
 public class AnalysisModulePanel extends JPanel {
 
     private final AnalisisService service;
+    private JTabbedPane tabs;
 
     private final JComboBox<TablaHistorica> historicoTablaCombo =
             new JComboBox<>(new TablaHistorica[]{TablaHistorica.INFRAESTRUCTURA,
@@ -90,6 +98,13 @@ public class AnalysisModulePanel extends JPanel {
         tabs.addTab("Producción de carne", buildCarneTab());
         tabs.addTab("Metas estratégicas", buildMetasTab());
         add(tabs, BorderLayout.CENTER);
+        this.tabs = tabs;
+
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        acciones.setOpaque(false);
+        acciones.add(new AppButton("Exportar PDF", e -> exportar(true)));
+        acciones.add(new AppButton("Exportar Excel", e -> exportar(false)));
+        add(acciones, BorderLayout.SOUTH);
 
         if (service != null) {
             llenarComboUEB(huevosUeb, huevosUebIds);
@@ -386,6 +401,95 @@ public class AnalysisModulePanel extends JPanel {
         barras.add(new BarChartPanel.Barra("Meta 2030", meta.getValorEstimado2030()));
         reemplazar(metasChartContainer,
                 new BarChartPanel(meta.getIndicador(), meta.getUnidadMedida(), meta.getFuente(), barras));
+    }
+
+    // -------------------- Exportación PDF / Excel (CU-14) --------------------
+
+    private void exportar(boolean pdf) {
+        try {
+            List<DataTablePanel> tablas = recolectarTablas();
+            if (tablas.isEmpty()) {
+                MessageHelper.showValidation(this,
+                        "La pestaña activa no tiene resultados para exportar. Consulte primero los datos.");
+                return;
+            }
+            String tituloPestana = tabs.getTitleAt(tabs.getSelectedIndex());
+            String nombre = "analisis-pican-" + tituloPestana.toLowerCase().replace(' ', '-').replace('á', 'a')
+                    .replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u');
+            JFileChooser selector = new JFileChooser();
+            selector.setDialogTitle("Ubicación de destino del " + (pdf ? "PDF" : "Excel"));
+            selector.setSelectedFile(new File(nombre + (pdf ? ".pdf" : ".xlsx")));
+            if (selector.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            java.nio.file.Path destino = selector.getSelectedFile().toPath();
+            if (pdf) {
+                List<ExportadorPdf.Seccion> secciones = new ArrayList<>();
+                for (DataTablePanel tabla : tablas) {
+                    secciones.add(new ExportadorPdf.Seccion(tabla.getTitulo(), columnas(tabla), filas(tabla)));
+                }
+                ExportadorPdf.escribir(destino, "Análisis e indicadores · " + tituloPestana, secciones);
+            } else {
+                List<ExportadorXlsx.Hoja> hojas = new ArrayList<>();
+                for (DataTablePanel tabla : tablas) {
+                    hojas.add(new ExportadorXlsx.Hoja(tabla.getTitulo(), columnas(tabla), filas(tabla)));
+                }
+                ExportadorXlsx.escribir(destino, hojas);
+            }
+            MessageHelper.showInfo(this, "Exportación completada:\n" + destino.toAbsolutePath());
+        } catch (RuntimeException ex) {
+            MessageHelper.showValidation(this, "No se pudo exportar: " + ex.getMessage());
+        }
+    }
+
+    private List<DataTablePanel> recolectarTablas() {
+        List<DataTablePanel> tablas = new ArrayList<>();
+        switch (tabs.getSelectedIndex()) {
+            case 0:
+                tablasEn(historicoTablaContainer, tablas);
+                break;
+            case 1:
+                tablasEn(huevosResultados, tablas);
+                break;
+            case 2:
+                tablasEn(carneResultados, tablas);
+                break;
+            case 3:
+                tablasEn(metasTablaContainer, tablas);
+                tablasEn(metasComparacionContainer, tablas);
+                break;
+            default:
+                break;
+        }
+        return tablas;
+    }
+
+    private void tablasEn(Container contenedor, List<DataTablePanel> destino) {
+        for (Component componente : contenedor.getComponents()) {
+            if (componente instanceof DataTablePanel) {
+                destino.add((DataTablePanel) componente);
+            } else if (componente instanceof Container) {
+                tablasEn((Container) componente, destino);
+            }
+        }
+    }
+
+    private String[] columnas(DataTablePanel tabla) {
+        int cantidad = tabla.getTableModel().getColumnCount();
+        String[] columnas = new String[cantidad];
+        for (int c = 0; c < cantidad; c++) {
+            columnas[c] = tabla.getTableModel().getColumnName(c);
+        }
+        return columnas;
+    }
+
+    private List<Object[]> filas(DataTablePanel tabla) {
+        List<Object[]> filas = new ArrayList<>();
+        for (Object fila : tabla.getTableModel().getDataVector()) {
+            Vector<?> celdas = (Vector<?>) fila;
+            filas.add(celdas.toArray(new Object[0]));
+        }
+        return filas;
     }
 
     // -------------------- Utilidades --------------------

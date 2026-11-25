@@ -80,6 +80,21 @@ public class Rol {
         return new Rol(id, clave, descripcion);
     }
 
+    /** Devuelve el rol previsto cuyo identificador estable coincide, o null. */
+    public static Rol desdeId(UUID idRol) {
+        if (idRol == null) {
+            return null;
+        }
+        for (String nombre : new String[]{ADMINISTRADOR, JEFE_UEB,
+                ESPECIALISTA_PRODUCCION, ESPECIALISTA_ESTADISTICA}) {
+            Rol rol = predefinido(nombre);
+            if (rol != null && rol.getIdRol().equals(idRol)) {
+                return rol;
+            }
+        }
+        return null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

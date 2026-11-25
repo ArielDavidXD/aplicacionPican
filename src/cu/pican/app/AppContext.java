@@ -3,6 +3,7 @@ package cu.pican.app;
 import cu.pican.backup.PgBackupOperations;
 import cu.pican.backup.PostgresBackupOperations;
 import cu.pican.backup.VerificadorDestinoSistema;
+import cu.pican.model.ControlRestauracion;
 import cu.pican.persistence.DatabaseConfig;
 import cu.pican.persistence.JdbcConnectionManager;
 import cu.pican.persistence.JdbcTransactionManager;
@@ -83,6 +84,7 @@ import cu.pican.service.AutorizacionService;
 import cu.pican.service.BackupService;
 import cu.pican.service.AuthService;
 import cu.pican.service.ConsolidadoUEBService;
+import cu.pican.service.DashboardService;
 import cu.pican.service.DestinoService;
 import cu.pican.service.IncidenciaService;
 import cu.pican.service.ImportacionService;
@@ -169,6 +171,7 @@ public class AppContext {
     private RecepcionService recepcionService;
     private IncidenciaService incidenciaService;
     private AnalisisService analisisService;
+    private DashboardService dashboardService;
     private InformeService informeService;
     private ImportacionReferenciasRepository importacionRepository;
     private ImportacionService importacionService;
@@ -217,6 +220,10 @@ public class AppContext {
                 : null;
         this.backupService = new BackupService(config, conexiones, operacionesBackup,
                 new VerificadorDestinoSistema(), auditoriaBackups, controlRestauracionRepository);
+        this.dashboardService = new DashboardService(analisisService, parteNaveService,
+                produccionCarneService, consolidadoUEBService, valeEntregaService, incidenciaService,
+                informeService, usuarioService, uebService, naveService, productoService,
+                destinoService, backupService);
         cablearDependencias();
 
         // Cuenta administrativa inicial solo si no existe. En PostgreSQL exige contraseña
@@ -314,6 +321,7 @@ public class AppContext {
         recepcionService.setAutorizacion(autorizacionService);
         incidenciaService.setAutorizacion(autorizacionService);
         analisisService.setAutorizacion(autorizacionService);
+        dashboardService.setAutorizacion(autorizacionService);
         informeService.setAutorizacion(autorizacionService);
         importacionService.setAutorizacion(autorizacionService);
         backupService.setAutorizacion(autorizacionService);
@@ -325,6 +333,15 @@ public class AppContext {
         valeEntregaService.setBloqueoPostRestauracion(bloqueoTrasRestauracion);
         if (syncService != null) {
             syncService.setBloqueoPostRestauracion(bloqueoTrasRestauracion);
+            // DN/AL: la central los genera; las UEB los importan. Una bajada completa
+            // desbloquea la instalación LOCAL restaurada (SIN-13).
+            syncService.setEsCentral(esCentral());
+            syncService.setDesbloqueoPostRestauracion(() -> {
+                if (DatabaseConfig.MODO_LOCAL.equals(config.getModo())) {
+                    controlRestauracionRepository.guardar(
+                            ControlRestauracion.desbloqueado(config.getIdInstancia()));
+                }
+            });
         }
 
         // CU-11 usa incidencias y CU-12 consulta recepciones: se resuelve la dependencia circular en un único lugar.
@@ -404,6 +421,11 @@ public class AppContext {
 
     public boolean esMemoria() {
         return !postgresql;
+    }
+
+    /** True cuando PICAN_DB_MODE=CENTRAL: esta instalación genera bajadas (DN) y altas (AL). */
+    public boolean esCentral() {
+        return DatabaseConfig.MODO_CENTRAL.equals(config.getModo());
     }
 
     public DatabaseConfig getConfig() {
@@ -511,6 +533,7 @@ public class AppContext {
         recepcionService.setAutorizacion(servicio);
         incidenciaService.setAutorizacion(servicio);
         analisisService.setAutorizacion(servicio);
+        dashboardService.setAutorizacion(servicio);
         informeService.setAutorizacion(servicio);
         importacionService.setAutorizacion(servicio);
         backupService.setAutorizacion(servicio);
@@ -544,6 +567,10 @@ public class AppContext {
 
     public AnalisisService getAnalisisService() {
         return analisisService;
+    }
+
+    public DashboardService getDashboardService() {
+        return dashboardService;
     }
 
     public InformeService getInformeService() {

@@ -1,5 +1,6 @@
 package cu.pican.sync;
 
+import cu.pican.model.Rol;
 import cu.pican.persistence.JdbcConnectionManager;
 import cu.pican.persistence.JdbcSupport;
 import cu.pican.sync.SyncEsquema.Fk;
@@ -40,7 +41,7 @@ public final class SyncRepositorio {
     public void registrarPaquete(Map<String, Object> manifestacion, String estado, String mensaje, UUID idUsuario) {
         String sql = "INSERT INTO sync_paquete (id_paquete, tipo, id_ueb_origen, id_destino, generado_en, "
                 + "version_protocolo, version_esquema, id_lote, cantidad_registros, hash_integridad, "
-                + "estado, mensaje, id_usuario) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                + "estado, mensaje, id_usuario, secuencia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         ejecutar(sql, ps -> {
             ps.setObject(1, uuid(texto(manifestacion.get("idPaquete"))), Types.OTHER);
             ps.setString(2, texto(manifestacion.get("tipo")));
@@ -55,6 +56,12 @@ public final class SyncRepositorio {
             ps.setString(11, estado);
             JdbcSupport.setTexto(ps, 12, mensaje);
             uuidNullable(ps, 13, idUsuario == null ? texto(manifestacion.get("generadoPor")) : idUsuario.toString());
+            Long secuencia = parseLongNullable(texto(manifestacion.get("secuencia")));
+            if (secuencia == null) {
+                ps.setNull(14, Types.BIGINT);
+            } else {
+                ps.setLong(14, secuencia);
+            }
         });
     }
 
@@ -74,7 +81,8 @@ public final class SyncRepositorio {
         }
         String estado = texto(paquete.get("estado"));
         return "IMPORTADO".equals(estado) || "PARCIAL".equals(estado)
-                || "RECHAZADO".equals(estado) || "CONFIRMADO".equals(estado);
+                || "RECHAZADO".equals(estado) || "CONFIRMADO".equals(estado)
+                || "APLICADO".equals(estado);
     }
 
     public void actualizarEstadoPaquete(UUID idPaquete, String estado, String mensaje) {
@@ -233,22 +241,26 @@ public final class SyncRepositorio {
                 if (actualizada == null) {
                     continue;
                 }
-                Registro registro = new Registro();
-                registro.tabla = tabla;
-                registro.accion = "UPSERT";
-                registro.idRegistro = id;
-                registro.version = Long.parseLong(texto(actualizada.get("version"), "1"));
-                registro.idUebOrigen = texto(actualizada.get("id_ueb_origen"));
-                registro.creadoEn = texto(actualizada.get("creado_en"));
-                registro.actualizadoEn = texto(actualizada.get("actualizado_en"));
-                registro.eliminadoLogico = Boolean.parseBoolean(texto(actualizada.get("eliminado_logico"), "false"));
-                for (Map.Entry<String, Tipo> columna : SyncEsquema.columnas(tabla).entrySet()) {
-                    registro.datos.put(columna.getKey(), texto(actualizada.get(columna.getKey())));
-                }
-                resultado.add(registro);
+                resultado.add(aRegistro(tabla, actualizada));
             }
         }
         return resultado;
+    }
+
+    private Registro aRegistro(String tabla, Map<String, Object> fila) {
+        Registro registro = new Registro();
+        registro.tabla = tabla;
+        registro.accion = "UPSERT";
+        registro.idRegistro = texto(fila.get(SyncEsquema.clavePrimaria(tabla)));
+        registro.version = Long.parseLong(texto(fila.get("version"), "1"));
+        registro.idUebOrigen = texto(fila.get("id_ueb_origen"));
+        registro.creadoEn = texto(fila.get("creado_en"));
+        registro.actualizadoEn = texto(fila.get("actualizado_en"));
+        registro.eliminadoLogico = Boolean.parseBoolean(texto(fila.get("eliminado_logico"), "false"));
+        for (Map.Entry<String, Tipo> columna : SyncEsquema.columnas(tabla).entrySet()) {
+            registro.datos.put(columna.getKey(), texto(fila.get(columna.getKey())));
+        }
+        return registro;
     }
 
     private void etiquetarOrigen(String tabla, String id, UUID idUebOrigen) {
@@ -370,6 +382,249 @@ public final class SyncRepositorio {
     }
 
     // -------------------------------------------------------------------------
+    // Bajada (DN) y alta (AL)
+    // -------------------------------------------------------------------------
+
+    /** Catálogos y usuarios que la central envía a una UEB en una bajada (DN). */
+    public List<Registro> listarBajada(UUID idUeb) {
+        List<Registro> resultado = new ArrayList<>();
+        for (String tabla : SyncEsquema.tablasBajadaEnOrden()) {
+            List<Map<String, Object>> filas;
+            if ("usuario".equals(tabla)) {
+                filas = filas("SELECT * FROM usuario WHERE id_ueb_origen = ? "
+                        + "ORDER BY creado_en, actualizado_en",
+                        ps -> ps.setObject(1, idUeb.toString(), Types.OTHER));
+            } else {
+                filas = filas("SELECT * FROM " + tabla + " WHERE id_ueb_origen IS NULL "
+                        + "ORDER BY creado_en, actualizado_en", ps -> { });
+            }
+            for (Map<String, Object> fila : filas) {
+                resultado.add(aRegistro(tabla, fila));
+            }
+        }
+        return resultado;
+    }
+
+    /** Contenido de un alta (AL): la fila de la UEB más todo lo que incluiría una bajada. */
+    public List<Registro> listarAlta(UUID idUeb) {
+        List<Registro> resultado = new ArrayList<>();
+        Map<String, Object> fila = unaFila("SELECT * FROM ueb WHERE id_ueb = ?",
+                ps -> ps.setObject(1, idUeb.toString(), Types.OTHER));
+        if (fila != null) {
+            resultado.add(aRegistro("ueb", fila));
+        }
+        resultado.addAll(listarBajada(idUeb));
+        return resultado;
+    }
+
+    /**
+     * Aplica un registro de bajada o alta en la instalación local. A diferencia del
+     * flujo UP, la fila queda sellada con {@code sincronizado_en} para que nunca se
+     * reexporte hacia el central.
+     */
+    public void aplicarRegistroDescarga(Registro registro, UUID idLote, LocalDateTime fecha) {
+        String tabla = registro.tabla;
+        Map<String, Tipo> columnas = SyncEsquema.columnas(tabla);
+        LinkedHashMap<String, String> datos = new LinkedHashMap<>(registro.datos);
+        datos.put("version", Long.toString(registro.version));
+        datos.put("id_ueb_origen", registro.idUebOrigen);
+        datos.put("creado_en", registro.creadoEn);
+        datos.put("actualizado_en", registro.actualizadoEn == null
+                ? LocalDateTime.now().toString() : registro.actualizadoEn);
+        datos.put("eliminado_logico", Boolean.toString(registro.eliminadoLogico));
+        datos.put("id_lote_sincronizacion", idLote.toString());
+        datos.put("sincronizado_en", fecha.toString());
+
+        if (!existeFila(tabla, registro.idRegistro)) {
+            StringBuilder sql = new StringBuilder("INSERT INTO " + tabla + " (");
+            boolean primero = true;
+            for (String columna : columnas.keySet()) {
+                if (!primero) {
+                    sql.append(',');
+                }
+                primero = false;
+                sql.append(columna);
+            }
+            sql.append(") VALUES (");
+            for (int i = 0; i < columnas.size(); i++) {
+                if (i > 0) {
+                    sql.append(',');
+                }
+                sql.append('?');
+            }
+            sql.append(')');
+            ejecutar(sql.toString(), ps -> {
+                int i = 1;
+                for (String columna : columnas.keySet()) {
+                    SyncEsquema.asignar(ps, i++, columnas.get(columna), datos.get(columna));
+                }
+            });
+            return;
+        }
+
+        LinkedHashMap<String, Tipo> actualizables = new LinkedHashMap<>();
+        for (Map.Entry<String, Tipo> columna : columnas.entrySet()) {
+            if ("creado_en".equals(columna.getKey())) {
+                continue;
+            }
+            actualizables.put(columna.getKey(), columna.getValue());
+        }
+        StringBuilder sql = new StringBuilder("UPDATE " + tabla + " SET ");
+        boolean primero = true;
+        for (String columna : actualizables.keySet()) {
+            if (!primero) {
+                sql.append(',');
+            }
+            primero = false;
+            sql.append(columna).append(" = ?");
+        }
+        sql.append(" WHERE ").append(SyncEsquema.clavePrimaria(tabla)).append(" = ?");
+        ejecutar(sql.toString(), ps -> {
+            int i = 1;
+            for (Map.Entry<String, Tipo> columna : actualizables.entrySet()) {
+                SyncEsquema.asignar(ps, i++, columna.getValue(), datos.get(columna.getKey()));
+            }
+            ps.setObject(i, registro.idRegistro, Types.OTHER);
+        });
+    }
+
+    /** Garantiza que los roles referenciados por los usuarios del paquete existan localmente. */
+    public void asegurarRoles(List<Registro> registros) {
+        for (Registro registro : registros) {
+            if (!"usuario".equals(registro.tabla)) {
+                continue;
+            }
+            String idRol = registro.datos.get("id_rol");
+            if (idRol == null) {
+                continue;
+            }
+            Rol rol = Rol.desdeId(UUID.fromString(idRol));
+            if (rol == null) {
+                continue;
+            }
+            ejecutar("INSERT INTO rol (id_rol, nombre, descripcion) VALUES (?,?,?) "
+                    + "ON CONFLICT (id_rol) DO NOTHING", ps -> {
+                ps.setObject(1, idRol, Types.OTHER);
+                ps.setString(2, rol.getNombre());
+                ps.setString(3, rol.getDescripcion());
+            });
+        }
+    }
+
+    /** Siguiente número de paquete por UEB y sentido (UP/DN). Los contadores son independientes. */
+    public long siguienteSecuencia(UUID idUeb, String sentido) {
+        Map<String, Object> fila = unaFila("INSERT INTO sync_secuencia (id_ueb, sentido, ultima) "
+                + "VALUES (?, ?, 1) ON CONFLICT (id_ueb, sentido) DO UPDATE SET "
+                + "ultima = sync_secuencia.ultima + 1 RETURNING ultima", ps -> {
+            ps.setObject(1, idUeb.toString(), Types.OTHER);
+            ps.setString(2, sentido);
+        });
+        return Long.parseLong(texto(fila.get("ultima"), "1"));
+    }
+
+    /** Última secuencia usada sin incrementarla; sirve para sugerir nombres de archivo. */
+    public long ultimaSecuencia(UUID idUeb, String sentido) {
+        Map<String, Object> fila = unaFila("SELECT ultima FROM sync_secuencia WHERE id_ueb = ? AND sentido = ?",
+                ps -> {
+                    ps.setObject(1, idUeb.toString(), Types.OTHER);
+                    ps.setString(2, sentido);
+                });
+        return fila == null ? 0L : Long.parseLong(texto(fila.get("ultima"), "0"));
+    }
+
+    public String configuracion(String clave) {
+        Map<String, Object> fila = unaFila("SELECT valor FROM sync_configuracion WHERE clave = ?",
+                ps -> ps.setString(1, clave));
+        return fila == null ? null : texto(fila.get("valor"));
+    }
+
+    public void guardarConfiguracion(String clave, String valor) {
+        ejecutar("INSERT INTO sync_configuracion (clave, valor, actualizado_en) "
+                + "VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (clave) DO UPDATE SET "
+                + "valor = EXCLUDED.valor, actualizado_en = CURRENT_TIMESTAMP", ps -> {
+            ps.setString(1, clave);
+            JdbcSupport.setTexto(ps, 2, valor);
+        });
+    }
+
+    /** Último número de vale conocido para una UEB, o null si todavía no emitió ninguno. */
+    public Long ultimoValeConocido(UUID idUeb) {
+        Map<String, Object> fila = unaFila("SELECT numero_vale FROM vale_entrega WHERE id_ueb = ? "
+                        + "ORDER BY numero_vale DESC LIMIT 1",
+                ps -> ps.setObject(1, idUeb.toString(), Types.OTHER));
+        if (fila == null) {
+            return null;
+        }
+        String numero = texto(fila.get("numero_vale"));
+        int guion = numero == null ? -1 : numero.lastIndexOf('-');
+        if (guion < 0 || guion >= numero.length() - 1) {
+            return null;
+        }
+        try {
+            return Long.parseLong(numero.substring(guion + 1));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    /** Adelanta el contador local de vales sin retroceder nunca. */
+    public void sincronizarValeSecuencia(UUID idUeb, long ultimo) {
+        ejecutar("INSERT INTO vale_secuencia (id_ueb, secuencia) VALUES (?, ?) "
+                + "ON CONFLICT (id_ueb) DO UPDATE SET secuencia = GREATEST(vale_secuencia.secuencia, EXCLUDED.secuencia)",
+                ps -> {
+                    ps.setObject(1, idUeb.toString(), Types.OTHER);
+                    ps.setLong(2, ultimo);
+                });
+    }
+
+    public String codigoUeb(UUID idUeb) {
+        Map<String, Object> fila = unaFila("SELECT codigo FROM ueb WHERE id_ueb = ?",
+                ps -> ps.setObject(1, idUeb.toString(), Types.OTHER));
+        return fila == null ? null : texto(fila.get("codigo"));
+    }
+
+    /** Vincula de forma duradera un usuario central a su UEB para que viaje en las bajadas. */
+    public void vincularUsuarioAUEB(UUID idUsuario, UUID idUeb) {
+        ejecutar("UPDATE usuario SET id_ueb_origen = ?, version = version + 1, "
+                + "actualizado_en = CURRENT_TIMESTAMP, sincronizado_en = NULL WHERE id_usuario = ?", ps -> {
+            ps.setObject(1, idUeb.toString(), Types.OTHER);
+            ps.setObject(2, idUsuario.toString(), Types.OTHER);
+        });
+    }
+
+    public Map<String, Object> buscarUsuario(String nombreUsuario) {
+        return unaFila("SELECT * FROM usuario WHERE lower(btrim(nombre_usuario)) = lower(btrim(?)) LIMIT 1",
+                ps -> ps.setString(1, nombreUsuario));
+    }
+
+    public List<Map<String, Object>> listarRecibosUp(UUID idUeb, int limite) {
+        return filas("SELECT id_paquete, generado_en, cantidad_registros, estado, secuencia "
+                + "FROM sync_paquete WHERE tipo = 'UP' AND id_ueb_origen = ? "
+                + "ORDER BY generado_en DESC LIMIT ?", ps -> {
+            ps.setObject(1, idUeb.toString(), Types.OTHER);
+            ps.setInt(2, limite);
+        });
+    }
+
+    public List<Map<String, Object>> resumenItemsPorPaquete(UUID idUeb) {
+        return filas("SELECT p.id_paquete, i.estado, COUNT(*) AS total "
+                + "FROM sync_item i JOIN sync_paquete p ON p.id_paquete = i.id_paquete "
+                + "WHERE p.tipo = 'UP' AND p.id_ueb_origen = ? "
+                + "GROUP BY p.id_paquete, i.estado ORDER BY p.id_paquete, i.estado", ps ->
+                ps.setObject(1, idUeb.toString(), Types.OTHER));
+    }
+
+    public List<Map<String, Object>> listarRechazos(UUID idUeb, int limite) {
+        return filas("SELECT p.id_paquete, p.generado_en, i.tabla, i.id_registro, i.detalle "
+                + "FROM sync_item i JOIN sync_paquete p ON p.id_paquete = i.id_paquete "
+                + "WHERE p.tipo = 'UP' AND p.id_ueb_origen = ? AND i.estado = 'RECHAZADO' "
+                + "ORDER BY p.generado_en DESC LIMIT ?", ps -> {
+            ps.setObject(1, idUeb.toString(), Types.OTHER);
+            ps.setInt(2, limite);
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // Utilidades JDBC
     // -------------------------------------------------------------------------
 
@@ -465,5 +720,12 @@ public final class SyncRepositorio {
     private static String texto(Object valor, String porDefecto) {
         String resultado = texto(valor);
         return resultado == null || resultado.trim().isEmpty() ? porDefecto : resultado;
+    }
+
+    private static Long parseLongNullable(String valor) {
+        if (valor == null || valor.trim().isEmpty()) {
+            return null;
+        }
+        return Long.parseLong(valor.trim());
     }
 }

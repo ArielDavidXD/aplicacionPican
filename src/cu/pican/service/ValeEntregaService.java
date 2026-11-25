@@ -12,9 +12,7 @@ import cu.pican.persistence.TransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -23,13 +21,12 @@ import java.util.function.BooleanSupplier;
  * Servicio de negocio para emisión y consulta de vales de entrega.
  * Un vale contiene exactamente un producto (sin detalles múltiples).
  *
- * Numeración consecutiva por UEB (en memoria, primera versión):
- * - Se genera de forma aislada en este servicio, con control sincronizado para evitar condiciones de carrera.
- * - Los números no se repiten durante la ejecución y no se reutilizan (el contador solo avanza).
+ * Numeración consecutiva por UEB (persistente):
+ * - La secuencia vive en el repositorio: tabla vale_secuencia en PostgreSQL (atómica por UEB)
+ *   o contador en memoria para el modo demostración.
+ * - Los números no se repiten y no se reutilizan (la secuencia solo avanza).
  * - El formato utilizado es provisional (p. ej. CODIGO_UEB-000001, basado en el código de la UEB) y
  *   NO constituye una decisión oficial aprobada.
- * - Limitación: los contadores en memoria se pierden al cerrar la aplicación.
- * - El diseño debe trasladarse a PostgreSQL con persistencia y generación segura (p. ej. secuencias por UEB/transacción).
  */
 public class ValeEntregaService extends ServicioAutorizado {
 
@@ -45,8 +42,8 @@ public class ValeEntregaService extends ServicioAutorizado {
     private BooleanSupplier bloqueoPostRestauracion = () -> false;
     private final TransactionManager transacciones;
 
-    // Contadores consecutivos por UEB (solo memoria, no persistentes entre ejecuciones)
-    private final Map<UUID, Integer> secuenciasPorUEB = new HashMap<>();
+    // Evita condiciones de carrera dentro de la JVM; la persistencia real de la secuencia
+    // se garantiza en el repositorio (tabla vale_secuencia en PostgreSQL).
     private final Object secuenciaLock = new Object();
 
     public ValeEntregaService(ValeEntregaRepository valeEntregaRepository,
@@ -133,7 +130,7 @@ public class ValeEntregaService extends ServicioAutorizado {
 
     /**
      * Genera el siguiente número consecutivo para la UEB indicada.
-     * Aislado, sincronizado (sin condiciones de carrera en memoria) y sin reutilización.
+     * La secuencia es persistente (PostgreSQL) y no se reutiliza.
      * Formato provisional no oficial.
      */
     public String generarNumeroVale(UUID idUEB) {
@@ -146,14 +143,12 @@ public class ValeEntregaService extends ServicioAutorizado {
 
     private String generarNumeroVale(UEB ueb) {
         synchronized (secuenciaLock) {
-            UUID idUEB = ueb.getIdUEB();
-            int actual = secuenciasPorUEB.getOrDefault(idUEB, 0);
             String numero;
             do {
-                actual++;
+                int actual = valeEntregaRepository.siguienteSecuencia(ueb.getIdUEB());
                 numero = formatearNumero(ueb, actual);
+                // Seguridad ante vales importados por sincronización que ocupen el número generado.
             } while (valeEntregaRepository.findByNumeroVale(numero).isPresent());
-            secuenciasPorUEB.put(idUEB, actual); // nunca retrocede, no se reutiliza
             return numero;
         }
     }

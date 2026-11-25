@@ -170,7 +170,7 @@ public final class ValidacionIntegralPostgresTest {
             parte.setGallinasEnfermas(3);
             parte.setHuevosProducidos(321);
             parte.setHuevosRotos(4);
-            parte.setPiensoKg(new BigDecimal("45.750"));
+            parte.setPiensoKg(new BigDecimal("45.75"));
             parte.setObservaciones("Validación integral 4.15");
             contexto.getParteNaveService().registrar(parte);
             entrar(usuarioEstad, CLAVE_ESTAD);
@@ -289,10 +289,15 @@ public final class ValidacionIntegralPostgresTest {
                     LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31),
                     LocalDate.of(2026, 4, 2), "Especialista integral", "Resumen integral");
             idInforme = informe.getIdInforme();
-            check(Informe.ESTADO_ELABORADO.equals(informe.getEstado()), "El informe no nació ELABORADO");
+            check(Informe.ESTADO_BORRADOR.equals(informe.getEstado()), "El informe no nació BORRADOR");
             contexto.getInformeService().agregarFuente(idInforme, TipoFuenteInforme.REFERENCIA_HISTORICA,
                     "INT-" + idInforme, "Fuente integral", "Información de la prueba", null);
             check(contexto.getInformeService().consultarFuentes(idInforme).size() == 1, "Fuente no persistida");
+            contexto.getInformeService().guardarSecciones(idInforme, "Producción frente a metas.",
+                    "Entregas.", "Infraestructura.", "Calidad de los datos.", "Alertas.", "Causas y medidas.");
+            contexto.getInformeService().enviarARevision(idInforme);
+            check(Informe.ESTADO_EN_REVISION.equals(
+                    contexto.getInformeService().buscarPorId(idInforme).getEstado()), "Informe no EN_REVISION");
             contexto.getInformeService().registrarDecision(idInforme, "Directivo integral", "APROBADO",
                     LocalDate.of(2026, 4, 3), null);
             check(Informe.ESTADO_APROBADO.equals(

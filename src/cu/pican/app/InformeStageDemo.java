@@ -89,7 +89,7 @@ public class InformeStageDemo {
 
         System.out.println("1) Creación correcta de un informe");
         Informe i1 = crear("Informe de producción - enero 2026");
-        check(Informe.ESTADO_ELABORADO.equals(i1.getEstado()), "Estado inicial ELABORADO");
+        check(Informe.ESTADO_BORRADOR.equals(i1.getEstado()), "Estado inicial BORRADOR");
         check(i1.getVersion() == 1L && i1.getNumeroRevision() == 1, "Versión 1 y revisión 1");
         check(i1.getIdInformeRaiz().equals(i1.getIdInforme()), "El informe es la raíz de su cadena");
         check(i1.getFechaCreacion() != null, "Fecha de creación asignada");
@@ -119,7 +119,10 @@ public class InformeStageDemo {
             check(!n.contains("cantidad") && !n.contains("valor"), "FuenteInforme no copia valores: " + f.getName());
         }
 
-        System.out.println("4) Decisión APROBADO");
+        System.out.println("4) Envío a revisión y decisión APROBADO");
+        completarParaRevision(i1);
+        check(Informe.ESTADO_EN_REVISION.equals(service.buscarPorId(i1.getIdInforme()).getEstado()),
+                "El informe completo pasa a EN_REVISION");
         DecisionDirectivo d1 = service.registrarDecision(i1.getIdInforme(), "Directivo Uno",
                 DecisionDirectivo.APROBADO, desde, "");
         check(DecisionDirectivo.APROBADO.equals(d1.getDecision()), "Decisión APROBADO registrada");
@@ -130,6 +133,7 @@ public class InformeStageDemo {
         Informe i2 = crear("Informe devuelto");
         service.agregarFuente(i2.getIdInforme(), TipoFuenteInforme.REFERENCIA_HISTORICA,
                 "T1-2019", "Referencia T1", "Información histórica oficial PICAN", null);
+        completarParaRevision(i2);
         DecisionDirectivo d2 = service.registrarDecision(i2.getIdInforme(), "Directivo Dos",
                 DecisionDirectivo.DEVUELTO, hasta, "Revisar el resumen de destinos.");
         check(DecisionDirectivo.DEVUELTO.equals(d2.getDecision()), "Decisión DEVUELTO registrada");
@@ -139,13 +143,15 @@ public class InformeStageDemo {
 
         System.out.println("6) Rechazo de devolución sin observación");
         Informe i3 = crear("Informe sin observación");
+        completarParaRevision(i3);
         expectValidation(() -> service.registrarDecision(i3.getIdInforme(), "Directivo Tres",
                 DecisionDirectivo.DEVUELTO, desde, "   "), "devolución sin observación");
-        check(Informe.ESTADO_ELABORADO.equals(service.buscarPorId(i3.getIdInforme()).getEstado()), "Estado no cambia tras el rechazo");
+        check(Informe.ESTADO_EN_REVISION.equals(service.buscarPorId(i3.getIdInforme()).getEstado()),
+                "Estado no cambia tras el rechazo");
         check(service.consultarHistorialDecisiones(i3.getIdInforme()).isEmpty(), "No se registró la decisión inválida");
 
         System.out.println("7) Imposibilidad de entregar un informe no aprobado");
-        expectValidation(() -> service.registrarEntrega(i3.getIdInforme(), "GEGAN", desde, "Especialista", ""), "entrega en ELABORADO");
+        expectValidation(() -> service.registrarEntrega(i3.getIdInforme(), "GEGAN", desde, "Especialista", ""), "entrega en EN_REVISION");
         expectValidation(() -> service.registrarEntrega(i2.getIdInforme(), "GEGAN", desde, "Especialista", ""), "entrega en DEVUELTO");
         check(service.consultarEntregas(i3.getIdInforme()).isEmpty(), "Sin entregas en informe no aprobado");
 
@@ -153,7 +159,7 @@ public class InformeStageDemo {
         EntregaInforme e1 = service.registrarEntrega(i1.getIdInforme(), "GEGAN", hasta, "Especialista Uno", "Entrega inicial");
         check(e1.getDestinatario() == DestinatarioInstitucional.GEGAN, "Destinatario GEGAN");
         check(Informe.ESTADO_ENTREGADO.equals(service.buscarPorId(i1.getIdInforme()).getEstado()), "Informe ENTREGADO");
-        check(service.buscarPorId(i1.getIdInforme()).getVersion() == 3L, "Versión incrementada a 3");
+        check(service.buscarPorId(i1.getIdInforme()).getVersion() == 5L, "Versión incrementada con cada transición");
         expectValidation(() -> service.registrarEntrega(i1.getIdInforme(), "GEGAN", hasta, "Especialista Uno", ""), "entrega duplicada GEGAN");
 
         System.out.println("9) Entrega a MINAG");
@@ -182,8 +188,8 @@ public class InformeStageDemo {
                 .anyMatch(i -> i.getIdInforme().equals(i1.getIdInforme())), "i1 aparece en ENTREGADO");
         check(service.filtrarPorEstado(Informe.ESTADO_DEVUELTO).stream()
                 .anyMatch(i -> i.getIdInforme().equals(i2.getIdInforme())), "i2 aparece en DEVUELTO");
-        check(service.filtrarPorEstado(Informe.ESTADO_ELABORADO).stream()
-                .anyMatch(i -> i.getIdInforme().equals(i3.getIdInforme())), "i3 aparece en ELABORADO");
+        check(service.filtrarPorEstado(Informe.ESTADO_EN_REVISION).stream()
+                .anyMatch(i -> i.getIdInforme().equals(i3.getIdInforme())), "i3 aparece en EN_REVISION");
 
         System.out.println("14) Protección de informes entregados");
         String tituloOriginal = service.buscarPorId(i1.getIdInforme()).getTitulo();
@@ -198,23 +204,52 @@ public class InformeStageDemo {
         check(revision.getNumeroRevision() == 2, "Nueva revisión número 2");
         check(i2.getIdInforme().equals(revision.getIdInformeAnterior()), "Se registra el informe anterior");
         check(i2.getIdInformeRaiz().equals(revision.getIdInformeRaiz()), "Misma raíz de cadena");
-        check(Informe.ESTADO_ELABORADO.equals(revision.getEstado()), "La revisión inicia en ELABORADO");
+        check(Informe.ESTADO_BORRADOR.equals(revision.getEstado()), "La revisión inicia en BORRADOR");
         check("Informe devuelto".equals(anterior.getTitulo())
                 && Informe.ESTADO_DEVUELTO.equals(anterior.getEstado()), "Versión anterior intacta");
         check(service.consultarFuentes(revision.getIdInforme()).size() == 1, "Fuentes referenciadas en la revisión");
+        completarParaRevision(revision);
         service.registrarDecision(revision.getIdInforme(), "Directivo Cuatro",
                 DecisionDirectivo.APROBADO, hasta, "");
         check(service.consultarHistorialDecisiones(anterior.getIdInforme()).size() == 1, "Decisión anterior conservada");
         check(service.consultarHistorialDecisiones(revision.getIdInforme()).size() == 1, "Nueva decisión en la revisión");
         check(service.consultarRevisiones(anterior.getIdInformeRaiz()).size() == 2, "Dos revisiones en la cadena");
 
+        System.out.println("16) Composición y exportación de las ocho secciones");
+        check(service.componerSecciones(i1.getIdInforme()).size() == 8, "Ocho secciones compuestas");
+        check(service.componerSecciones(i1.getIdInforme()).get("8. Aprobación").contains("APROBADO"),
+                "La aprobación derivada refleja la decisión registrada");
+        java.nio.file.Path pdf = java.nio.file.Files.createTempFile("pican-informe-", ".pdf");
+        java.nio.file.Path xlsx = java.nio.file.Files.createTempFile("pican-informe-", ".xlsx");
+        service.exportarPdf(pdf, i1.getIdInforme());
+        service.exportarExcel(xlsx, i1.getIdInforme());
+        byte[] cabeceraPdf = java.nio.file.Files.readAllBytes(pdf);
+        byte[] cabeceraXlsx = java.nio.file.Files.readAllBytes(xlsx);
+        check(cabeceraPdf.length > 500 && new String(cabeceraPdf, 0, 5, java.nio.charset.StandardCharsets.ISO_8859_1).equals("%PDF-"),
+                "PDF válido con contenido");
+        check(cabeceraXlsx.length > 500 && cabeceraXlsx[0] == 'P' && cabeceraXlsx[1] == 'K', "Excel válido (ZIP) con contenido");
+        java.nio.file.Files.deleteIfExists(pdf);
+        java.nio.file.Files.deleteIfExists(xlsx);
+
         System.out.println("\n==> Verificación automatizada de Etapa 4.11 (CU-15) finalizada correctamente.");
-        System.out.println("Nota: sin autenticación, sin cuentas para directivos, sin PDF/Excel, sin USB y sin PostgreSQL.");
+        System.out.println("Nota: sin autenticación, sin USB y sin PostgreSQL.");
     }
 
     private static Informe crear(String titulo) {
         return service.crearInforme(null, titulo, desde, hasta, desde, "Especialista de estadística",
                 "Resumen del informe " + titulo);
+    }
+
+    /** Redacta las secciones 2 a 7 y envía el borrador a revisión del directivo. */
+    private static void completarParaRevision(Informe informe) {
+        service.guardarSecciones(informe.getIdInforme(),
+                "La producción del período se compara con las metas estratégicas 2030 sin calcular cumplimiento.",
+                "Entregas planificadas a GEGAN y MINAG durante el período analizado.",
+                "Estado general de naves y unidades asociadas en el período.",
+                "Revisión de la calidad de los datos de los partes y consolidados.",
+                "Alertas detectadas sobre el comportamiento productivo.",
+                "Causas identificadas y medidas propuestas para el próximo período.");
+        service.enviarARevision(informe.getIdInforme());
     }
 
     private static void prepararDatosAnalisis(UEBService uebService, NaveService naveService,

@@ -15,12 +15,14 @@ public class DataTablePanel extends JPanel {
 
     private final DefaultTableModel tableModel;
     private final JTable table;
+    private String titulo;
 
     public DataTablePanel(String[] columns, Object[][] rows) {
         this("Registros (datos ficticios)", columns, rows);
     }
 
     public DataTablePanel(String title, String[] columns, Object[][] rows) {
+        this.titulo = title;
         setLayout(new BorderLayout());
         setOpaque(false);
         setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(UITheme.BORDER), title));
@@ -40,6 +42,16 @@ public class DataTablePanel extends JPanel {
 
     public JTable getTable() {
         return table;
+    }
+
+    public String getTitulo() {
+        return titulo;
+    }
+
+    public void setTitulo(String titulo) {
+        this.titulo = titulo;
+        setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(UITheme.BORDER), titulo));
+        repaint();
     }
 
     public DefaultTableModel getTableModel() {

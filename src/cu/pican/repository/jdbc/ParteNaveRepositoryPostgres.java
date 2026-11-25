@@ -117,4 +117,10 @@ public class ParteNaveRepositoryPostgres extends JdbcRepositorySupport<ParteNave
     public List<ParteNave> findByFecha(LocalDate fechaProduccion) {
         return listarConFiltro("fecha_produccion = ?", List.of(fechaProduccion), "creado_en");
     }
+
+    @Override
+    public List<ParteNave> findByNaveYFecha(UUID idNave, LocalDate fechaProduccion) {
+        return listarConFiltro("id_nave = ? AND fecha_produccion = ?",
+                List.of(idNave, fechaProduccion), "creado_en");
+    }
 }

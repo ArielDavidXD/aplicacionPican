@@ -146,6 +146,13 @@ public class RecepcionService extends ServicioAutorizado {
 
         // 6. Fecha y hora válidas
         ValidationUtils.requireNonNull(recepcion.getFechaHoraRecepcion(), "La fecha y hora de recepción son obligatorias.");
+        if (recepcion.getFechaHoraRecepcion().isAfter(LocalDateTime.now())) {
+            throw new ValidacionException("La fecha y hora de recepción no puede ser futura.");
+        }
+        if (vale.getFechaHoraEmision() != null
+                && recepcion.getFechaHoraRecepcion().isBefore(vale.getFechaHoraEmision())) {
+            throw new ValidacionException("La fecha y hora de recepción no puede ser anterior a la emisión del vale.");
+        }
 
         // 7 y 8. Resultado y reglas asociadas
         ValidationUtils.requireNotBlank(recepcion.getResultado(), "El resultado de la recepción es obligatorio.");

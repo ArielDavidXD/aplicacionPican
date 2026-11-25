@@ -50,6 +50,12 @@ public class InformeRepositoryPostgres extends JdbcRepositorySupport<Informe>
         informe.setEspecialistaResponsable(rs.getString("especialista_responsable"));
         informe.setIdUsuario(JdbcSupport.uuid(rs, "id_usuario"));
         informe.setContenidoResumen(rs.getString("contenido_resumen"));
+        informe.setSeccionProduccionMetas(rs.getString("seccion_produccion_metas"));
+        informe.setSeccionEntregas(rs.getString("seccion_entregas"));
+        informe.setSeccionInfraestructura(rs.getString("seccion_infraestructura"));
+        informe.setSeccionCalidadDatos(rs.getString("seccion_calidad_datos"));
+        informe.setSeccionAlertas(rs.getString("seccion_alertas"));
+        informe.setSeccionCausasMedidas(rs.getString("seccion_causas_medidas"));
         informe.setEstado(rs.getString("estado"));
         informe.setFechaCreacion(JdbcSupport.fechaHora(rs, "creado_en"));
         informe.setVersion(JdbcSupport.largo(rs, "version"));
@@ -61,7 +67,7 @@ public class InformeRepositoryPostgres extends JdbcRepositorySupport<Informe>
     protected void escribirInsercion(PreparedStatement ps, Informe entidad) throws SQLException {
         JdbcSupport.setUuid(ps, 1, entidad.getIdInforme());
         escribirDatos(ps, entidad, 2);
-        ps.setLong(15, 1L);
+        ps.setLong(21, 1L);
     }
 
     @Override
@@ -80,9 +86,15 @@ public class InformeRepositoryPostgres extends JdbcRepositorySupport<Informe>
         JdbcSupport.setString(ps, i + 7, entidad.getEspecialistaResponsable());
         JdbcSupport.setUuid(ps, i + 8, entidad.getIdUsuario());
         JdbcSupport.setString(ps, i + 9, entidad.getContenidoResumen());
-        JdbcSupport.setString(ps, i + 10, entidad.getEstado());
-        JdbcSupport.setEntero(ps, i + 11, entidad.getNumeroRevision());
-        JdbcSupport.setFechaHora(ps, i + 12,
+        JdbcSupport.setString(ps, i + 10, entidad.getSeccionProduccionMetas());
+        JdbcSupport.setString(ps, i + 11, entidad.getSeccionEntregas());
+        JdbcSupport.setString(ps, i + 12, entidad.getSeccionInfraestructura());
+        JdbcSupport.setString(ps, i + 13, entidad.getSeccionCalidadDatos());
+        JdbcSupport.setString(ps, i + 14, entidad.getSeccionAlertas());
+        JdbcSupport.setString(ps, i + 15, entidad.getSeccionCausasMedidas());
+        JdbcSupport.setString(ps, i + 16, entidad.getEstado());
+        JdbcSupport.setEntero(ps, i + 17, entidad.getNumeroRevision());
+        JdbcSupport.setFechaHora(ps, i + 18,
                 entidad.getFechaCreacion() == null ? LocalDateTime.now() : entidad.getFechaCreacion());
     }
 
@@ -90,25 +102,29 @@ public class InformeRepositoryPostgres extends JdbcRepositorySupport<Informe>
     protected String columnasInsercion() {
         return "id_informe, id_informe_raiz, id_informe_anterior, numero_informe, titulo, "
                 + "periodo_desde, periodo_hasta, fecha_elaboracion, especialista_responsable, "
-                + "id_usuario, contenido_resumen, estado, numero_revision, creado_en, version";
+                + "id_usuario, contenido_resumen, seccion_produccion_metas, seccion_entregas, "
+                + "seccion_infraestructura, seccion_calidad_datos, seccion_alertas, seccion_causas_medidas, "
+                + "estado, numero_revision, creado_en, version";
     }
 
     @Override
     protected String marcadoresInsercion() {
-        return "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
+        return "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
     }
 
     @Override
     protected String columnasActualizacion() {
         return "id_informe_raiz = ?, id_informe_anterior = ?, numero_informe = ?, titulo = ?, "
                 + "periodo_desde = ?, periodo_hasta = ?, fecha_elaboracion = ?, "
-                + "especialista_responsable = ?, id_usuario = ?, contenido_resumen = ?, estado = ?, "
+                + "especialista_responsable = ?, id_usuario = ?, contenido_resumen = ?, "
+                + "seccion_produccion_metas = ?, seccion_entregas = ?, seccion_infraestructura = ?, "
+                + "seccion_calidad_datos = ?, seccion_alertas = ?, seccion_causas_medidas = ?, estado = ?, "
                 + "numero_revision = ?, creado_en = ?, version = version + 1";
     }
 
     @Override
     protected int marcadoresActualizacion() {
-        return 13;
+        return 19;
     }
 
     @Override

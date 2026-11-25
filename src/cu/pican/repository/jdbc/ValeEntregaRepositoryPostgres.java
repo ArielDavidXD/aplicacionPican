@@ -4,8 +4,10 @@ import cu.pican.model.ValeEntrega;
 import cu.pican.persistence.JdbcConnectionManager;
 import cu.pican.persistence.JdbcRepositorySupport;
 import cu.pican.persistence.JdbcSupport;
+import cu.pican.persistence.PersistenciaException;
 import cu.pican.repository.ValeEntregaRepository;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -162,5 +164,27 @@ public class ValeEntregaRepositoryPostgres extends JdbcRepositorySupport<ValeEnt
             return List.of();
         }
         return listarConFiltro("estado = ?", List.of(estado), "creado_en");
+    }
+
+    @Override
+    public int siguienteSecuencia(UUID idUEB) {
+        String sql = "INSERT INTO vale_secuencia (id_ueb, secuencia) VALUES (?, 1) "
+                + "ON CONFLICT (id_ueb) DO UPDATE SET secuencia = vale_secuencia.secuencia + 1 "
+                + "RETURNING secuencia";
+        Connection c = abrir();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            JdbcSupport.setUuid(ps, 1, idUEB);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+            throw new PersistenciaException("No se pudo obtener la secuencia de vales para la UEB.");
+        } catch (SQLException ex) {
+            throw new PersistenciaException("No se pudo obtener la secuencia de vales: "
+                    + JdbcConnectionManager.describirError(ex), ex);
+        } finally {
+            cerrar(c);
+        }
     }
 }

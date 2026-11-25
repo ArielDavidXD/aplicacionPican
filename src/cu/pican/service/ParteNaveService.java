@@ -5,6 +5,7 @@ import cu.pican.repository.NaveRepository;
 import cu.pican.repository.ParteNaveRepository;
 import cu.pican.repository.UsuarioRepository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -12,9 +13,13 @@ import java.util.UUID;
 
 /**
  * Servicio de negocio para partes de producción de huevos por nave.
- * No impone unicidad nave+fecha (pendiente de revisión/justificación documental).
+ * Unicidad nave+fecha (equivale a UEB+nave+fecha porque la nave pertenece a una única UEB).
+ * Estados: BORRADOR (guardado sin oficializar) y REGISTRADO (parte oficial).
  */
 public class ParteNaveService extends ServicioAutorizado {
+
+    private static final int MAX_OBSERVACIONES = 250;
+    private static final BigDecimal CENTESIMA = new BigDecimal("0.01");
 
     private final ParteNaveRepository parteNaveRepository;
     private final NaveRepository naveRepository;
@@ -34,13 +39,25 @@ public class ParteNaveService extends ServicioAutorizado {
         this.proveedorSesion = proveedorSesion;
     }
 
+    /** Registra el parte como REGISTRADO (oficial). */
     public ParteNave registrar(ParteNave parte) {
+        return guardar(parte, ParteNave.ESTADO_REGISTRADO);
+    }
+
+    /** Guarda el parte en estado BORRADOR; puede oficializarse luego con registrar(). */
+    public ParteNave guardarBorrador(ParteNave parte) {
+        return guardar(parte, ParteNave.ESTADO_BORRADOR);
+    }
+
+    private ParteNave guardar(ParteNave parte, String estado) {
         autorizacion().requerir(CasoUso.CU_05);
         if (parte != null) {
             parte.setIdUsuario(UsuarioSesionSupport.resolver(proveedorSesion, parte.getIdUsuario()));
+            parte.setEstado(estado);
             validarNaveActiva(parte.getIdNave());
         }
         validar(parte);
+        validarUnicidadNaveFecha(parte, null);
         return parteNaveRepository.save(parte);
     }
 
@@ -50,6 +67,7 @@ public class ParteNaveService extends ServicioAutorizado {
             parte.setIdUsuario(UsuarioSesionSupport.resolver(proveedorSesion, parte.getIdUsuario()));
         }
         validar(parte);
+        validarUnicidadNaveFecha(parte, parte.getIdParte());
         return parteNaveRepository.update(parte);
     }
 
@@ -81,6 +99,9 @@ public class ParteNaveService extends ServicioAutorizado {
             throw new ValidacionException("La nave indicada no existe.");
         }
         ValidationUtils.requireNonNull(parte.getFechaProduccion(), "La fecha de producción es obligatoria.");
+        if (parte.getFechaProduccion().isAfter(LocalDate.now())) {
+            throw new ValidacionException("La fecha de producción no puede ser futura.");
+        }
 
         // Cantidades obligatorias: no nulas y no negativas.
         ValidationUtils.requireNonNull(parte.getGallinasVivas(), "El campo 'gallinasVivas' es obligatorio.");
@@ -94,8 +115,24 @@ public class ParteNaveService extends ServicioAutorizado {
         ValidationUtils.requireNonNegative(parte.getHuevosProducidos(), "huevosProducidos");
         ValidationUtils.requireNonNegative(parte.getHuevosRotos(), "huevosRotos");
 
-        // Cantidad opcional: no negativa cuando se informa.
+        // Cantidad opcional: no negativa cuando se informa y con máximo 2 decimales.
         ValidationUtils.requireNonNegative(parte.getPiensoKg(), "piensoKg");
+        if (parte.getPiensoKg() != null
+                && parte.getPiensoKg().remainder(CENTESIMA).compareTo(BigDecimal.ZERO) != 0) {
+            throw new ValidacionException("El pienso (kg) no puede tener más de 2 decimales.");
+        }
+
+        // Observaciones: máximo 250 caracteres.
+        if (parte.getObservaciones() != null && parte.getObservaciones().length() > MAX_OBSERVACIONES) {
+            throw new ValidacionException("Las observaciones no pueden superar los " + MAX_OBSERVACIONES + " caracteres.");
+        }
+
+        // Estado: solo BORRADOR o REGISTRADO.
+        if (parte.getEstado() == null
+                || (!ParteNave.ESTADO_BORRADOR.equals(parte.getEstado())
+                    && !ParteNave.ESTADO_REGISTRADO.equals(parte.getEstado()))) {
+            throw new ValidacionException("El estado del parte debe ser BORRADOR o REGISTRADO.");
+        }
 
         // Huevos rotos no pueden superar huevos producidos (si ambos están presentes).
         if (parte.getHuevosRotos() != null && parte.getHuevosProducidos() != null
@@ -118,6 +155,16 @@ public class ParteNaveService extends ServicioAutorizado {
         if (parte.getIdUsuario() != null && usuarioRepository != null
                 && !usuarioRepository.findById(parte.getIdUsuario()).isPresent()) {
             throw new ValidacionException("El usuario que registra el parte no existe.");
+        }
+    }
+
+    /** Unicidad nave+fecha: un solo parte por nave y fecha (excluye el propio registro al actualizar). */
+    private void validarUnicidadNaveFecha(ParteNave parte, UUID idParteExcluido) {
+        for (ParteNave existente : parteNaveRepository.findByNaveYFecha(parte.getIdNave(), parte.getFechaProduccion())) {
+            if (!existente.getIdParte().equals(idParteExcluido)) {
+                throw new ValidacionException("Ya existe un parte para esa nave y fecha. "
+                        + "Selecciónelo en la tabla para editarlo o registrarlo.");
+            }
         }
     }
 

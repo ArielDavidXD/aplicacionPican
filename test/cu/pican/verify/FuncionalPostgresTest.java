@@ -123,7 +123,7 @@ public final class FuncionalPostgresTest {
         parte.setGallinasEnfermas(2);
         parte.setHuevosProducidos(250);
         parte.setHuevosRotos(3);
-        parte.setPiensoKg(new BigDecimal("12.500"));
+        parte.setPiensoKg(new BigDecimal("12.50"));
         parte.setObservaciones("Prueba funcional con JDBC");
         parte.setCreadoEn(LocalDateTime.now());
         parte.setVersion(1L);
@@ -178,14 +178,22 @@ public final class FuncionalPostgresTest {
                 LocalDate.of(2026, 2, 5), "Especialista de prueba",
                 "Resumen funcional con PostgreSQL");
         idInforme = informe.getIdInforme();
-        check(Informe.ESTADO_ELABORADO.equals(contexto.getInformeService().buscarPorId(idInforme).getEstado()),
-                "El informe debió nacer ELABORADO");
+        check(Informe.ESTADO_BORRADOR.equals(contexto.getInformeService().buscarPorId(idInforme).getEstado()),
+                "El informe debió nacer BORRADOR");
 
         contexto.getInformeService().agregarFuente(
                 idInforme, TipoFuenteInforme.REFERENCIA_HISTORICA, "T1",
                 "Fuente de prueba JDBC", "Tabla 1", "Consulta funcional Etapa 4.14");
         check(contexto.getInformeService().consultarFuentes(idInforme).size() == 1,
                 "No se persistió la fuente del informe");
+
+        contexto.getInformeService().guardarSecciones(idInforme,
+                "Sección de producción frente a metas.", "Sección de entregas.",
+                "Sección de infraestructura.", "Sección de calidad de datos.",
+                "Sección de alertas.", "Sección de causas y medidas.");
+        contexto.getInformeService().enviarARevision(idInforme);
+        check(Informe.ESTADO_EN_REVISION.equals(contexto.getInformeService().buscarPorId(idInforme).getEstado()),
+                "El informe completo debió pasar a EN_REVISION");
 
         contexto.getInformeService().registrarDecision(
                 idInforme, "Directivo de prueba", "APROBADO", LocalDate.of(2026, 2, 6), null);

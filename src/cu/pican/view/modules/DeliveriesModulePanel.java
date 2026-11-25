@@ -19,19 +19,32 @@ import cu.pican.view.components.ModuleHeader;
 import cu.pican.view.components.UITheme;
 
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.print.PageFormat;
+import java.awt.print.Printable;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -250,12 +263,14 @@ public class DeliveriesModulePanel extends JPanel {
 
         AppButton emitirBtn = new AppButton("Emitir vale");
         AppButton anularBtn = new AppButton("Anular vale");
+        AppButton reimprimirBtn = new AppButton("Reimprimir vale");
         AppButton limpiarBtn = new AppButton("Limpiar formulario");
         AppButton recargarBtn = new AppButton("Recargar catálogos");
         AppButton actualizarBtn = new AppButton("Actualizar tabla");
 
         emitirBtn.addActionListener(e -> emitirVale());
         anularBtn.addActionListener(e -> anularVale());
+        reimprimirBtn.addActionListener(e -> reimprimirVale());
         limpiarBtn.addActionListener(e -> prepararNuevoVale());
         recargarBtn.addActionListener(e -> {
             recargarCatalogos();
@@ -266,6 +281,7 @@ public class DeliveriesModulePanel extends JPanel {
 
         actions.add(emitirBtn);
         actions.add(anularBtn);
+        actions.add(reimprimirBtn);
         actions.add(limpiarBtn);
         actions.add(recargarBtn);
         actions.add(actualizarBtn);
@@ -372,6 +388,96 @@ public class DeliveriesModulePanel extends JPanel {
             MessageHelper.showValidation(this, ex.getMessage());
         } catch (Exception ex) {
             MessageHelper.showValidation(this, "No se pudo anular el vale: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * CU-13: reimpresión del vale seleccionado con la marca DUPLICADO (o ANULADO si el vale está anulado).
+     * Muestra una vista previa y permite imprimir la copia. El vale original no se modifica.
+     */
+    private void reimprimirVale() {
+        if (valeSeleccionado == null) {
+            MessageHelper.showValidation(this, "Debe seleccionar un vale de la tabla para reimprimir.");
+            return;
+        }
+        ValeEntrega vale = valeSeleccionado;
+        boolean anulado = ValeEntrega.ESTADO_ANULADO.equals(vale.getEstado());
+        String marca = anulado ? "ANULADO" : "DUPLICADO";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("VALE DE ENTREGA - COPIA ").append(marca).append('\n');
+        sb.append("---------------------------------------------\n");
+        sb.append("Número: ").append(safe(vale.getNumeroVale())).append('\n');
+        sb.append("Fecha y hora de emisión: ").append(formatFechaHora(vale.getFechaHoraEmision())).append('\n');
+        sb.append("UEB: ").append(nombreUEB(vale.getIdUEB())).append('\n');
+        sb.append("Destino: ").append(nombreDestino(vale.getIdDestino())).append('\n');
+        sb.append("Producto: ").append(nombreProducto(vale.getIdProducto())).append('\n');
+        sb.append("Cantidad: ").append(vale.getCantidadDespachada() != null
+                ? vale.getCantidadDespachada().toPlainString() : "").append('\n');
+        sb.append("Unidad de medida: ").append(safe(vale.getUnidadMedida())).append('\n');
+        sb.append("Estado: ").append(safe(vale.getEstado())).append('\n');
+        if (anulado) {
+            sb.append("Motivo de anulación: ").append(safe(vale.getMotivoAnulacion())).append('\n');
+            sb.append("Fecha y hora de anulación: ").append(formatFechaHora(vale.getFechaHoraAnulacion())).append('\n');
+        }
+        sb.append("---------------------------------------------\n");
+        sb.append("Copia reimpresa; no sustituye al vale original.");
+
+        mostrarVistaPrevia("Reimpresión del vale " + safe(vale.getNumeroVale()) + " (" + marca + ")",
+                sb.toString());
+    }
+
+    private void mostrarVistaPrevia(String titulo, String contenido) {
+        JTextArea area = new JTextArea(contenido);
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+
+        JDialog dialogo = new JDialog(SwingUtilities.getWindowAncestor(this), titulo, Dialog.ModalityType.APPLICATION_MODAL);
+        dialogo.setLayout(new BorderLayout(0, 8));
+        dialogo.add(new JScrollPane(area), BorderLayout.CENTER);
+
+        JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton imprimirBtn = new JButton("Imprimir");
+        JButton cerrarBtn = new JButton("Cerrar");
+        imprimirBtn.addActionListener(e -> imprimirTexto(titulo, contenido));
+        cerrarBtn.addActionListener(e -> dialogo.dispose());
+        botones.add(imprimirBtn);
+        botones.add(cerrarBtn);
+        dialogo.add(botones, BorderLayout.SOUTH);
+
+        dialogo.setSize(420, 460);
+        dialogo.setLocationRelativeTo(this);
+        dialogo.setVisible(true);
+    }
+
+    private void imprimirTexto(String titulo, String contenido) {
+        String[] lineas = contenido.split("\n", -1);
+        PrinterJob trabajo = PrinterJob.getPrinterJob();
+        trabajo.setJobName(titulo);
+        trabajo.setPrintable((Graphics graphics, PageFormat pageFormat, int pageIndex) -> {
+            if (pageIndex > 0) {
+                return Printable.NO_SUCH_PAGE;
+            }
+            Graphics2D g2 = (Graphics2D) graphics;
+            g2.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
+            g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            int altoLinea = g2.getFontMetrics().getHeight();
+            int y = altoLinea;
+            for (String linea : lineas) {
+                g2.drawString(linea, 0, y);
+                y += altoLinea;
+                if (y > pageFormat.getImageableHeight()) {
+                    break;
+                }
+            }
+            return Printable.PAGE_EXISTS;
+        });
+        try {
+            if (trabajo.printDialog()) {
+                trabajo.print();
+            }
+        } catch (PrinterException ex) {
+            MessageHelper.showValidation(this, "No se pudo imprimir: " + ex.getMessage());
         }
     }
 

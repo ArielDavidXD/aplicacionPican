@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +41,15 @@ public final class SyncEsquema {
     private static final LinkedHashMap<String, LinkedHashMap<String, Tipo>> TABLAS = new LinkedHashMap<>();
     private static final LinkedHashMap<String, String> CLAVES = new LinkedHashMap<>();
     private static final LinkedHashMap<String, List<Fk>> DEPENDENCIAS = new LinkedHashMap<>();
+    private static final LinkedHashSet<String> EXPORTABLES = new LinkedHashSet<>();
+    private static final LinkedHashSet<String> DESCARGA = new LinkedHashSet<>();
+
+    private static final List<String> ORDEN_BAJADA = Arrays.asList(
+            "producto", "destino", "producto_destino", "unidad_asociada",
+            "usuario", "indicador_historico");
+    private static final List<String> ORDEN_ALTA = Arrays.asList(
+            "ueb", "producto", "destino", "producto_destino", "unidad_asociada",
+            "usuario", "indicador_historico");
 
     static {
         registrar("ueb", "id_ueb", columnas(
@@ -112,17 +122,53 @@ public final class SyncEsquema {
                 Arrays.asList(new Fk("id_vale", "vale_entrega", true),
                         new Fk("id_recepcion", "recepcion", true),
                         new Fk("id_usuario", "usuario", false)));
+
+        // Bajada (DN) y alta (AL): catálogos y usuarios son de propiedad central y
+        // solo viajan central → UEB. No se exportan nunca de vuelta hacia el central.
+        registrarDescarga("usuario", "id_usuario", columnas(
+                "id_usuario", Tipo.UUID, "nombre_usuario", Tipo.TEXTO,
+                "nombre_completo", Tipo.TEXTO, "password_hash", Tipo.TEXTO,
+                "id_rol", Tipo.UUID, "activo", Tipo.BOOLEANO,
+                "cambio_contrasena_requerido", Tipo.BOOLEANO), Collections.emptyList());
+        registrarDescarga("indicador_historico", "id", columnas(
+                "id", Tipo.TEXTO, "tabla", Tipo.TEXTO, "indicador", Tipo.TEXTO,
+                "anio", Tipo.ENTERO, "valor", Tipo.DECIMAL,
+                "unidad_medida", Tipo.TEXTO, "fuente", Tipo.TEXTO), Collections.emptyList());
+        for (String tabla : Arrays.asList("ueb", "producto", "destino",
+                "producto_destino", "unidad_asociada")) {
+            DESCARGA.add(tabla);
+        }
     }
 
     private SyncEsquema() {
     }
 
     public static List<String> tablasEnOrden() {
-        return Collections.unmodifiableList(new ArrayList<>(TABLAS.keySet()));
+        List<String> orden = new ArrayList<>();
+        for (String tabla : TABLAS.keySet()) {
+            if (EXPORTABLES.contains(tabla)) {
+                orden.add(tabla);
+            }
+        }
+        return Collections.unmodifiableList(orden);
     }
 
     public static boolean esExportable(String tabla) {
-        return TABLAS.containsKey(tabla);
+        return EXPORTABLES.contains(tabla);
+    }
+
+    /** Tablas que viajan en una bajada (DN), en orden de aplicación. */
+    public static List<String> tablasBajadaEnOrden() {
+        return Collections.unmodifiableList(ORDEN_BAJADA);
+    }
+
+    /** Tablas que viajan en un alta (AL), en orden de aplicación. */
+    public static List<String> tablasAltaEnOrden() {
+        return Collections.unmodifiableList(ORDEN_ALTA);
+    }
+
+    public static boolean esBajable(String tabla) {
+        return DESCARGA.contains(tabla);
     }
 
     public static String clavePrimaria(String tabla) {
@@ -240,6 +286,20 @@ public final class SyncEsquema {
 
     private static void registrar(String tabla, String clave, LinkedHashMap<String, Tipo> columnasNegocio,
                                   List<Fk> dependencias) {
+        registrarInterno(tabla, clave, columnasNegocio, dependencias);
+        EXPORTABLES.add(tabla);
+    }
+
+    private static void registrarDescarga(String tabla, String clave,
+                                          LinkedHashMap<String, Tipo> columnasNegocio,
+                                          List<Fk> dependencias) {
+        registrarInterno(tabla, clave, columnasNegocio, dependencias);
+        DESCARGA.add(tabla);
+    }
+
+    private static void registrarInterno(String tabla, String clave,
+                                         LinkedHashMap<String, Tipo> columnasNegocio,
+                                         List<Fk> dependencias) {
         LinkedHashMap<String, Tipo> todas = new LinkedHashMap<>(columnasNegocio);
         todas.put("id_ueb_origen", Tipo.UUID);
         todas.put("version", Tipo.LONG);

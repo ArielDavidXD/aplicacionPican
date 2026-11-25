@@ -3,6 +3,7 @@ package cu.pican.view.modules;
 import cu.pican.app.AppContext;
 import cu.pican.model.Rol;
 import cu.pican.model.UEB;
+import cu.pican.model.Usuario;
 import cu.pican.sync.SyncException;
 import cu.pican.sync.SyncModelo.ResultadoImportacion;
 import cu.pican.sync.SyncService;
@@ -59,11 +60,20 @@ public class SyncModulePanel extends JPanel {
         if (Rol.JEFE_UEB.equals(rol)) {
             actions.add(new AppButton("Preparar paquete", e -> prepararPaquete()));
             actions.add(new AppButton("Importar confirmación", e -> importarConfirmacion()));
+            actions.add(new AppButton("Importar bajada (DN)", e -> importarBajada()));
         }
         if (Rol.ESPECIALISTA_ESTADISTICA.equals(rol)) {
             actions.add(new AppButton("Validar paquete", e -> validarPaquete()));
             actions.add(new AppButton("Importar paquete", e -> importarPaquete()));
             actions.add(new AppButton("Generar confirmación", e -> generarConfirmacion()));
+            actions.add(new AppButton("Generar bajada (DN)", e -> generarBajada()));
+        }
+        if (Rol.ADMINISTRADOR.equals(rol)) {
+            if (context != null && context.esCentral()) {
+                actions.add(new AppButton("Generar alta (AL)", e -> generarAlta()));
+            } else {
+                actions.add(new AppButton("Importar alta (AL)", e -> importarAlta()));
+            }
         }
         actions.add(new AppButton("Actualizar historial", e -> actualizarHistorial()));
         add(actions, BorderLayout.SOUTH);
@@ -192,6 +202,110 @@ public class SyncModulePanel extends JPanel {
             }
             ResultadoImportacion resultado = servicio().importarConfirmacion(archivo.toPath());
             MessageHelper.showInfo(this, "Confirmación importada: " + resultado.estado + ".\n" + resultado.mensaje);
+            actualizarHistorial();
+        });
+    }
+
+    private void generarBajada() {
+        ejecutar(() -> {
+            List<UEB> uebs = context.getUebService().listarTodas();
+            if (uebs.isEmpty()) {
+                MessageHelper.showValidation(this, "No hay UEB registradas para preparar la bajada.");
+                return;
+            }
+            String[] opciones = uebs.stream().map(u -> u.getNombre() + " (" + u.getIdUEB() + ")")
+                    .toArray(String[]::new);
+            String elegida = (String) JOptionPane.showInputDialog(this,
+                    "Seleccione la UEB de destino de la bajada:", "Generar bajada (DN)",
+                    JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+            if (elegida == null) {
+                return;
+            }
+            int inicio = elegida.lastIndexOf('(') + 1;
+            UUID idUeb = UUID.fromString(elegida.substring(inicio, elegida.length() - 1));
+            File destino = seleccionarArchivo(true, servicio().nombreSugeridoBajada(idUeb));
+            if (destino == null) {
+                return;
+            }
+            UUID idPaquete = servicio().generarBajada(destino.toPath(), idUeb);
+            MessageHelper.showInfo(this, "Bajada generada correctamente.\nIdentificador: " + idPaquete
+                    + "\nArchivo: " + destino.getAbsolutePath()
+                    + "\nEntréguela a la UEB por el medio manual acordado.");
+            actualizarHistorial();
+        });
+    }
+
+    private void importarBajada() {
+        ejecutar(() -> {
+            File archivo = seleccionarArchivo(false, "AVI_DN_paquete.avipkg");
+            if (archivo == null) {
+                return;
+            }
+            ResultadoImportacion resultado = servicio().importarBajada(archivo.toPath());
+            MessageHelper.showInfo(this, "Bajada importada: " + resultado.estado + ".\n" + resultado.mensaje);
+            actualizarHistorial();
+        });
+    }
+
+    private void generarAlta() {
+        ejecutar(() -> {
+            List<UEB> uebs = context.getUebService().listarTodas();
+            if (uebs.isEmpty()) {
+                MessageHelper.showValidation(this, "No hay UEB registradas para dar de alta.");
+                return;
+            }
+            String[] opciones = uebs.stream().map(u -> u.getNombre() + " (" + u.getIdUEB() + ")")
+                    .toArray(String[]::new);
+            String elegida = (String) JOptionPane.showInputDialog(this,
+                    "Seleccione la UEB que se dará de alta:", "Generar alta (AL)",
+                    JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+            if (elegida == null) {
+                return;
+            }
+            int inicio = elegida.lastIndexOf('(') + 1;
+            UUID idUeb = UUID.fromString(elegida.substring(inicio, elegida.length() - 1));
+            List<Usuario> jefes = new ArrayList<>();
+            for (Usuario usuario : context.getUsuarioService().listarTodos()) {
+                if (usuario.isActivo() && usuario.getRol() != null
+                        && Rol.JEFE_UEB.equals(usuario.getRol().getNombre())) {
+                    jefes.add(usuario);
+                }
+            }
+            if (jefes.isEmpty()) {
+                MessageHelper.showValidation(this,
+                        "No hay ningún Jefe de UEB activo. Regístrelo primero para poder dar el alta.");
+                return;
+            }
+            String[] nombres = jefes.stream().map(u -> u.getNombreCompleto()
+                    + " (" + u.getNombreUsuario() + ")").toArray(String[]::new);
+            String jefeElegido = (String) JOptionPane.showInputDialog(this,
+                    "Seleccione la cuenta inicial del Jefe de UEB:", "Generar alta (AL)",
+                    JOptionPane.QUESTION_MESSAGE, null, nombres, nombres[0]);
+            if (jefeElegido == null) {
+                return;
+            }
+            int paren = jefeElegido.lastIndexOf('(') + 1;
+            String nombreUsuario = jefeElegido.substring(paren, jefeElegido.length() - 1);
+            File destino = seleccionarArchivo(true, servicio().nombreSugeridoAlta(idUeb));
+            if (destino == null) {
+                return;
+            }
+            UUID idPaquete = servicio().generarPaqueteAlta(destino.toPath(), idUeb, nombreUsuario);
+            MessageHelper.showInfo(this, "Alta generada correctamente.\nIdentificador: " + idPaquete
+                    + "\nArchivo: " + destino.getAbsolutePath()
+                    + "\nEl identificador de activación solo podrá aplicarse una vez.");
+            actualizarHistorial();
+        });
+    }
+
+    private void importarAlta() {
+        ejecutar(() -> {
+            File archivo = seleccionarArchivo(false, "AVI_AL_paquete.avipkg");
+            if (archivo == null) {
+                return;
+            }
+            ResultadoImportacion resultado = servicio().importarPaqueteAlta(archivo.toPath());
+            MessageHelper.showInfo(this, "Alta importada: " + resultado.estado + ".\n" + resultado.mensaje);
             actualizarHistorial();
         });
     }

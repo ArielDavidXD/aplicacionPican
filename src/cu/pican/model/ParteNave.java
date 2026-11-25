@@ -8,12 +8,13 @@ import java.util.UUID;
 
 /**
  * Entidad de dominio: Parte de producción de huevos por nave.
- * Clave de negocio inicial propuesta: nave + fecha de producción (no implementada como restricción definitiva).
- * Validaciones propuestas (pendientes de implementar en servicio):
+ * Clave de negocio: nave + fecha de producción (unicidad validada en el servicio).
+ * Reglas aplicadas en el servicio:
  * - Cantidades no negativas.
  * - Gallinas muertas y enfermas no pueden superar las gallinas vivas.
  * - Huevos rotos no pueden superar los huevos producidos.
  * - Huevos buenos = huevos producidos - huevos rotos (cálculo derivado).
+ * - Estados: BORRADOR (guardado sin registrar) y REGISTRADO (parte oficial).
  */
 public class ParteNave {
 
@@ -25,9 +26,12 @@ public class ParteNave {
     private Integer gallinasEnfermas;
     private Integer huevosProducidos;
     private Integer huevosRotos;
+    public static final String ESTADO_BORRADOR = "BORRADOR";
+    public static final String ESTADO_REGISTRADO = "REGISTRADO";
+
     private BigDecimal piensoKg;
     private String observaciones;
-    private String estado; // Valores/flujo pendientes de definición.
+    private String estado;
     private UUID idUsuario;
     private LocalDateTime creadoEn;
     private Long version;
@@ -97,6 +101,14 @@ public class ParteNave {
 
     public void setHuevosRotos(Integer huevosRotos) {
         this.huevosRotos = huevosRotos;
+    }
+
+    /** Derivado (no persistido): huevos buenos = producidos - rotos. */
+    public Integer getHuevosBuenos() {
+        if (huevosProducidos == null || huevosRotos == null) {
+            return null;
+        }
+        return huevosProducidos - huevosRotos;
     }
 
     public BigDecimal getPiensoKg() {

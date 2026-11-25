@@ -11,7 +11,8 @@ import java.util.UUID;
  */
 public class Informe {
 
-    public static final String ESTADO_ELABORADO = "ELABORADO";
+    public static final String ESTADO_BORRADOR = "BORRADOR";
+    public static final String ESTADO_EN_REVISION = "EN_REVISION";
     public static final String ESTADO_DEVUELTO = "DEVUELTO";
     public static final String ESTADO_APROBADO = "APROBADO";
     public static final String ESTADO_ENTREGADO = "ENTREGADO";
@@ -28,6 +29,13 @@ public class Informe {
     /** Usuario autenticado que elabora el informe (opcional; no sustituye el nombre del especialista). */
     private UUID idUsuario;
     private String contenidoResumen;
+    /** Secciones 2 a 7 del informe (CU-15): la 1 es contenidoResumen y la 8 se compone al exportar. */
+    private String seccionProduccionMetas;
+    private String seccionEntregas;
+    private String seccionInfraestructura;
+    private String seccionCalidadDatos;
+    private String seccionAlertas;
+    private String seccionCausasMedidas;
     private String estado;
     private LocalDateTime fechaCreacion;
     private Long version;
@@ -65,6 +73,24 @@ public class Informe {
 
     public String getContenidoResumen() { return contenidoResumen; }
     public void setContenidoResumen(String contenidoResumen) { this.contenidoResumen = contenidoResumen; }
+
+    public String getSeccionProduccionMetas() { return seccionProduccionMetas; }
+    public void setSeccionProduccionMetas(String seccionProduccionMetas) { this.seccionProduccionMetas = seccionProduccionMetas; }
+
+    public String getSeccionEntregas() { return seccionEntregas; }
+    public void setSeccionEntregas(String seccionEntregas) { this.seccionEntregas = seccionEntregas; }
+
+    public String getSeccionInfraestructura() { return seccionInfraestructura; }
+    public void setSeccionInfraestructura(String seccionInfraestructura) { this.seccionInfraestructura = seccionInfraestructura; }
+
+    public String getSeccionCalidadDatos() { return seccionCalidadDatos; }
+    public void setSeccionCalidadDatos(String seccionCalidadDatos) { this.seccionCalidadDatos = seccionCalidadDatos; }
+
+    public String getSeccionAlertas() { return seccionAlertas; }
+    public void setSeccionAlertas(String seccionAlertas) { this.seccionAlertas = seccionAlertas; }
+
+    public String getSeccionCausasMedidas() { return seccionCausasMedidas; }
+    public void setSeccionCausasMedidas(String seccionCausasMedidas) { this.seccionCausasMedidas = seccionCausasMedidas; }
 
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }

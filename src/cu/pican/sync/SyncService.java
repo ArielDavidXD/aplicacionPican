@@ -1,5 +1,6 @@
 package cu.pican.sync;
 
+import cu.pican.model.Rol;
 import cu.pican.persistence.JdbcConnectionManager;
 import cu.pican.persistence.TransactionManager;
 import cu.pican.service.AutorizacionException;
@@ -37,19 +38,30 @@ public final class SyncService {
     public static final String EXPORTACION = "EXPORTACION_UEB";
     public static final String CONFIRMACION = "CONFIRMACION";
     public static final String CONFLICTOS = "CONFLICTOS";
+    public static final String BAJADA = "BAJADA_DN";
+    public static final String ALTA = "ALTA_AL";
+    public static final String CLAVE_VERSION_CONFIGURACION = "version_configuracion";
+    public static final String CLAVE_ACTIVACION = "id_activacion_aplicada";
 
     private static final Set<String> ENTRADAS_PERMITIDAS = new HashSet<>(Arrays.asList(
-            "MANIFEST.json", "REGISTROS.json", "CONFIRMACION.json"));
+            "MANIFEST.json", "REGISTROS.json", "CONFIRMACION.json",
+            "CATALOGOS.json", "RECIBO.json", "ALTA.json"));
     private static final Set<String> ENTRADAS_EXPORTACION = new HashSet<>(Arrays.asList(
             "MANIFEST.json", "REGISTROS.json"));
     private static final Set<String> ENTRADAS_CONFIRMACION = new HashSet<>(Arrays.asList(
             "MANIFEST.json", "CONFIRMACION.json"));
+    private static final Set<String> ENTRADAS_BAJADA = new HashSet<>(Arrays.asList(
+            "MANIFEST.json", "CATALOGOS.json", "RECIBO.json"));
+    private static final Set<String> ENTRADAS_ALTA = new HashSet<>(Arrays.asList(
+            "MANIFEST.json", "CATALOGOS.json", "ALTA.json"));
 
     private final TransactionManager transacciones;
     private final SyncRepositorio repositorio;
     private final AuthService authService;
     private final AutorizacionService autorizacion;
     private BooleanSupplier bloqueoPostRestauracion = () -> false;
+    private boolean esCentral = false;
+    private Runnable desbloqueoPostRestauracion = null;
 
     public SyncService(TransactionManager transacciones, JdbcConnectionManager conexiones, AuthService authService) {
         if (transacciones == null || authService == null) {
@@ -64,6 +76,35 @@ public final class SyncService {
     /** SIN-13: inyectado desde AppContext; bloquea la generacion de paquetes tras restauracion LOCAL. */
     public void setBloqueoPostRestauracion(BooleanSupplier bloqueoPostRestauracion) {
         this.bloqueoPostRestauracion = bloqueoPostRestauracion == null ? () -> false : bloqueoPostRestauracion;
+    }
+
+    /**
+     * Rol de la instalación según PICAN_DB_MODE. La central genera bajadas (DN) y altas (AL);
+     * las UEB solo los importan. Por defecto es UEB: fallo cerrado.
+     */
+    public void setEsCentral(boolean esCentral) {
+        this.esCentral = esCentral;
+    }
+
+    /** SIN-13: inyectado desde AppContext; importar una bajada completa desbloquea la UEB restaurada. */
+    public void setDesbloqueoPostRestauracion(Runnable desbloqueo) {
+        this.desbloqueoPostRestauracion = desbloqueo;
+    }
+
+    private void requerirCentral(CasoUso... casos) {
+        if (!esCentral) {
+            throw new SyncException(
+                    "Esta operación solo existe en la instalación central (PICAN_DB_MODE=CENTRAL).");
+        }
+        requerir(casos);
+    }
+
+    private void requerirLocal(CasoUso... casos) {
+        if (esCentral) {
+            throw new SyncException(
+                    "Esta operación solo existe en las UEB (PICAN_DB_MODE=LOCAL).");
+        }
+        requerir(casos);
     }
 
     private void verificarBloqueoPostRestauracion() {
@@ -96,9 +137,11 @@ public final class SyncService {
         payload.put("registros", registros);
         byte[] bytesPayload = SyncArchivo.bytes(SyncJson.escribir(payload));
 
+        long secuencia = repositorio.siguienteSecuencia(idUebOrigen, "UP");
         LinkedHashMap<String, Object> manifestacion = manifiestoBasico(
                 idPaquete, EXPORTACION, idUebOrigen, "CENTRAL", ahora, idLote,
                 pendientes.size(), bytesPayload, "REGISTROS.json");
+        manifestacion.put("secuencia", Long.toString(secuencia));
 
         LinkedHashMap<String, byte[]> entradas = new LinkedHashMap<>();
         entradas.put("MANIFEST.json", SyncArchivo.bytes(SyncJson.escribir(manifestacion)));
@@ -353,6 +396,421 @@ public final class SyncService {
     }
 
     // -------------------------------------------------------------------------
+    // Bajada (DN) · CU-09 genera en la central, CU-08 importa en la UEB
+    // -------------------------------------------------------------------------
+
+    /** Genera en la central una bajada con catálogos, usuarios de la UEB y recibo de paquetes UP. */
+    public UUID generarBajada(Path destino, UUID idUeb) {
+        verificarBloqueoPostRestauracion();
+        requerirCentral(CasoUso.CU_09);
+        if (idUeb == null) {
+            throw new SyncException("Debe identificarse la UEB de destino de la bajada.");
+        }
+        if (repositorio.leerFila("ueb", idUeb.toString()) == null) {
+            throw new SyncException("La UEB de destino no existe en la central: " + idUeb);
+        }
+        UUID idPaquete = UUID.randomUUID();
+        UUID idLote = UUID.randomUUID();
+        LocalDateTime ahora = LocalDateTime.now();
+        long secuencia = repositorio.siguienteSecuencia(idUeb, "DN");
+        long versionConfiguracion = siguienteVersionConfiguracion();
+
+        List<Registro> registros = repositorio.listarBajada(idUeb);
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        List<Object> lista = new ArrayList<>();
+        for (Registro registro : registros) {
+            lista.add(registro.aMapa());
+        }
+        payload.put("registros", lista);
+        byte[] bytesPayload = SyncArchivo.bytes(SyncJson.escribir(payload));
+
+        LinkedHashMap<String, Object> recibo = new LinkedHashMap<>();
+        List<Object> recibidos = new ArrayList<>();
+        for (Map<String, Object> paquete : repositorio.listarRecibosUp(idUeb, 20)) {
+            LinkedHashMap<String, Object> fila = new LinkedHashMap<>();
+            fila.put("idPaquete", texto(paquete.get("id_paquete")));
+            fila.put("generadoEn", texto(paquete.get("generado_en")));
+            fila.put("cantidadRegistros", texto(paquete.get("cantidad_registros")));
+            fila.put("estado", texto(paquete.get("estado")));
+            fila.put("secuencia", texto(paquete.get("secuencia")));
+            recibidos.add(fila);
+        }
+        List<Object> resumen = new ArrayList<>();
+        for (Map<String, Object> fila : repositorio.resumenItemsPorPaquete(idUeb)) {
+            LinkedHashMap<String, Object> item = new LinkedHashMap<>();
+            item.put("idPaquete", texto(fila.get("id_paquete")));
+            item.put("estado", texto(fila.get("estado")));
+            item.put("total", texto(fila.get("total")));
+            resumen.add(item);
+        }
+        List<Object> rechazos = new ArrayList<>();
+        for (Map<String, Object> fila : repositorio.listarRechazos(idUeb, 20)) {
+            LinkedHashMap<String, Object> item = new LinkedHashMap<>();
+            item.put("idPaquete", texto(fila.get("id_paquete")));
+            item.put("generadoEn", texto(fila.get("generado_en")));
+            item.put("tabla", texto(fila.get("tabla")));
+            item.put("idRegistro", texto(fila.get("id_registro")));
+            item.put("detalle", texto(fila.get("detalle")));
+            rechazos.add(item);
+        }
+        recibo.put("generadoEn", ahora.toString());
+        recibo.put("paquetesRecibidos", recibidos);
+        recibo.put("resumenPorPaquete", resumen);
+        recibo.put("rechazos", rechazos);
+        recibo.put("mensaje", "Estado de los paquetes UP recibidos por la central hasta esta bajada.");
+        byte[] bytesRecibo = SyncArchivo.bytes(SyncJson.escribir(recibo));
+
+        Long ultimoVale = repositorio.ultimoValeConocido(idUeb);
+        LinkedHashMap<String, Object> manifestacion = manifiestoBasico(
+                idPaquete, BAJADA, null, "UEB:" + idUeb, ahora, idLote,
+                registros.size(), bytesPayload, "CATALOGOS.json");
+        manifestacion.put("secuencia", Long.toString(secuencia));
+        manifestacion.put("versionConfiguracion", Long.toString(versionConfiguracion));
+        manifestacion.put("ultimoValeConocido", ultimoVale == null ? null : Long.toString(ultimoVale));
+        manifestacion.put("reciboSha256", SyncArchivo.sha256(bytesRecibo));
+
+        LinkedHashMap<String, byte[]> entradas = new LinkedHashMap<>();
+        entradas.put("MANIFEST.json", SyncArchivo.bytes(SyncJson.escribir(manifestacion)));
+        entradas.put("CATALOGOS.json", bytesPayload);
+        entradas.put("RECIBO.json", bytesRecibo);
+        SyncArchivo.escribir(destino, entradas);
+
+        UUID idUsuario = authService.getIdUsuarioAutenticado();
+        transacciones.ejecutar(() -> {
+            repositorio.registrarPaquete(manifestacion, "GENERADO", null, idUsuario);
+            for (Registro registro : registros) {
+                repositorio.registrarItem(idPaquete, new ItemResultado(
+                        registro.tabla, registro.idRegistro, "GENERADO", "Incluido en la bajada"));
+            }
+            return null;
+        });
+        return idPaquete;
+    }
+
+    /** Importa una bajada en la UEB. La central es la autoridad: nunca genera conflictos. */
+    public ResultadoImportacion importarBajada(Path origen) {
+        requerirLocal(CasoUso.CU_08);
+        PaqueteLeido paquete = leerValidado(origen);
+        if (!BAJADA.equals(paquete.tipo)) {
+            throw new SyncException("El archivo seleccionado no es una bajada (DN) de la central.");
+        }
+        String destino = texto(paquete.manifestacion.get("idDestino"), "");
+        UUID idUebLocal = uebDestinataria(destino);
+        UUID idPaquete = id(paquete.manifestacion.get("idPaquete"));
+        if (repositorio.paqueteYaProcesado(idPaquete)) {
+            return resultadoYaProcesado(idPaquete);
+        }
+        long versionRecibida = Long.parseLong(
+                texto(paquete.manifestacion.get("versionConfiguracion"), "1"));
+        long versionLocal = versionConfiguracionLocal();
+        if (versionRecibida < versionLocal) {
+            registrarRechazo(paquete, "La UEB no aplica una configuración anterior a la ya instalada: "
+                    + "recibida " + versionRecibida + ", local " + versionLocal + ".");
+            return new ResultadoImportacion(idPaquete.toString(), "RECHAZADO",
+                    "Bajada rechazada por versión de configuración anterior.");
+        }
+        Long ultimoVale = parseLongNullable(texto(paquete.manifestacion.get("ultimoValeConocido")));
+        UUID idLote = id(paquete.manifestacion.get("idLote"));
+        UUID idUsuario = authService.getIdUsuarioAutenticado();
+
+        ResultadoImportacion resultado = transacciones.ejecutar(() -> {
+            ResultadoImportacion acumulado = new ResultadoImportacion(idPaquete.toString(), "IMPORTADO", "");
+            repositorio.registrarPaquete(paquete.manifestacion, "RECIBIDO", null, idUsuario);
+            repositorio.asegurarRoles(paquete.registros);
+            for (String tabla : SyncEsquema.tablasBajadaEnOrden()) {
+                for (Registro registro : paquete.registros) {
+                    if (!tabla.equals(registro.tabla)) {
+                        continue;
+                    }
+                    ItemResultado item = aplicarBajadaUno(registro, idLote);
+                    repositorio.registrarItem(idPaquete, item);
+                    acumulado.items.add(item);
+                }
+            }
+            if (ultimoVale != null) {
+                repositorio.sincronizarValeSecuencia(idUebLocal, ultimoVale);
+            }
+            repositorio.guardarConfiguracion(CLAVE_VERSION_CONFIGURACION, Long.toString(versionRecibida));
+            long rechazados = acumulado.cuantos("RECHAZADO");
+            String estado = rechazados > 0 ? "PARCIAL" : "IMPORTADO";
+            String mensaje = "Bajada procesada: aplicados " + acumulado.cuantos("APLICADO")
+                    + ", omitidos " + acumulado.cuantos("OMITIDO")
+                    + ", rechazados " + rechazados + ".";
+            repositorio.actualizarEstadoPaquete(idPaquete, estado, mensaje);
+            acumulado.estado = estado;
+            acumulado.mensaje = mensaje;
+            return acumulado;
+        });
+
+        if (desbloqueoPostRestauracion != null) {
+            desbloqueoPostRestauracion.run();
+        }
+        return resultado;
+    }
+
+    private ItemResultado aplicarBajadaUno(Registro registro, UUID idLote) {
+        if (!SyncEsquema.esBajable(registro.tabla)) {
+            return new ItemResultado(registro.tabla, registro.idRegistro,
+                    "RECHAZADO", "Tabla no autorizada para bajadas (DN/AL).");
+        }
+        if (!"UPSERT".equals(registro.accion)) {
+            return new ItemResultado(registro.tabla, registro.idRegistro,
+                    "RECHAZADO", "Acción no reconocida: " + registro.accion);
+        }
+        long versionLocal = repositorio.versionFila(registro.tabla, registro.idRegistro);
+        if (versionLocal < 0 && registro.eliminadoLogico) {
+            return new ItemResultado(registro.tabla, registro.idRegistro,
+                    "OMITIDO", "Baja lógica de un registro que no existe localmente.");
+        }
+        if (versionLocal >= 0 && registro.version <= versionLocal) {
+            return new ItemResultado(registro.tabla, registro.idRegistro,
+                    "OMITIDO", "Registro ya aplicado con versión igual o posterior.");
+        }
+        repositorio.aplicarRegistroDescarga(registro, idLote, LocalDateTime.now());
+        String detalle = versionLocal < 0
+                ? "Registro nuevo aplicado desde la bajada."
+                : "Versión " + registro.version + " aplicada sobre la local " + versionLocal + ".";
+        return new ItemResultado(registro.tabla, registro.idRegistro, "APLICADO", detalle);
+    }
+
+    private UUID uebDestinataria(String destino) {
+        if (!destino.toUpperCase(Locale.ROOT).startsWith("UEB:")) {
+            throw new SyncException("El paquete no está dirigido a una UEB: " + destino);
+        }
+        UUID idUeb = id(destino.substring(4));
+        if (repositorio.leerFila("ueb", idUeb.toString()) == null) {
+            throw new SyncException("El paquete está dirigido a una UEB que no existe en esta instalación: "
+                    + idUeb + ". Primero debe aplicarse el alta (AL) correspondiente.");
+        }
+        return idUeb;
+    }
+
+    // -------------------------------------------------------------------------
+    // Alta (AL) · CU-17 genera en la central, CU-16/CU-08 importa en la UEB
+    // -------------------------------------------------------------------------
+
+    /**
+     * Genera en la central el alta inicial de una UEB. El jefe indicado queda vinculado
+     * de forma duradera a la UEB para que sus credenciales viajen en este y en los
+     * próximos paquetes.
+     */
+    public UUID generarPaqueteAlta(Path destino, UUID idUeb, String nombreUsuarioJefe) {
+        verificarBloqueoPostRestauracion();
+        requerirCentral(CasoUso.CU_17);
+        if (idUeb == null) {
+            throw new SyncException("Debe identificarse la UEB que se dará de alta.");
+        }
+        if (repositorio.leerFila("ueb", idUeb.toString()) == null) {
+            throw new SyncException("La UEB no existe en la central: " + idUeb);
+        }
+        Map<String, Object> jefe = nombreUsuarioJefe == null || nombreUsuarioJefe.trim().isEmpty()
+                ? null : repositorio.buscarUsuario(nombreUsuarioJefe);
+        if (jefe == null) {
+            throw new SyncException("No existe el usuario jefe indicado para el alta: " + nombreUsuarioJefe);
+        }
+        Rol rolJefe = Rol.desdeId(UUID.fromString(texto(jefe.get("id_rol"))));
+        if (rolJefe == null || !Rol.JEFE_UEB.equals(rolJefe.getNombre())
+                || !Boolean.parseBoolean(texto(jefe.get("activo"), "false"))) {
+            throw new SyncException("El usuario indicado para el alta debe ser un Jefe de UEB activo.");
+        }
+        UUID idJefe = UUID.fromString(texto(jefe.get("id_usuario")));
+        repositorio.vincularUsuarioAUEB(idJefe, idUeb);
+
+        UUID idPaquete = UUID.randomUUID();
+        UUID idLote = UUID.randomUUID();
+        LocalDateTime ahora = LocalDateTime.now();
+        long secuencia = repositorio.siguienteSecuencia(idUeb, "DN");
+        long versionConfiguracion = siguienteVersionConfiguracion();
+        String idActivacion = UUID.randomUUID().toString();
+
+        List<Registro> registros = repositorio.listarAlta(idUeb);
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        List<Object> lista = new ArrayList<>();
+        for (Registro registro : registros) {
+            lista.add(registro.aMapa());
+        }
+        payload.put("registros", lista);
+        byte[] bytesPayload = SyncArchivo.bytes(SyncJson.escribir(payload));
+
+        LinkedHashMap<String, Object> alta = new LinkedHashMap<>();
+        alta.put("idActivacion", idActivacion);
+        alta.put("idUeb", idUeb.toString());
+        alta.put("jefe", nombreUsuarioJefe);
+        alta.put("mensaje", "Alta inicial de la UEB. El identificador de activación se invalida "
+                + "tras completarse y no puede reutilizarse.");
+        byte[] bytesAlta = SyncArchivo.bytes(SyncJson.escribir(alta));
+
+        LinkedHashMap<String, Object> manifestacion = manifiestoBasico(
+                idPaquete, ALTA, null, "UEB:" + idUeb, ahora, idLote,
+                registros.size(), bytesPayload, "CATALOGOS.json");
+        manifestacion.put("secuencia", Long.toString(secuencia));
+        manifestacion.put("versionConfiguracion", Long.toString(versionConfiguracion));
+        manifestacion.put("idActivacion", idActivacion);
+        manifestacion.put("altaSha256", SyncArchivo.sha256(bytesAlta));
+
+        LinkedHashMap<String, byte[]> entradas = new LinkedHashMap<>();
+        entradas.put("MANIFEST.json", SyncArchivo.bytes(SyncJson.escribir(manifestacion)));
+        entradas.put("CATALOGOS.json", bytesPayload);
+        entradas.put("ALTA.json", bytesAlta);
+        SyncArchivo.escribir(destino, entradas);
+
+        UUID idUsuario = authService.getIdUsuarioAutenticado();
+        transacciones.ejecutar(() -> {
+            repositorio.registrarPaquete(manifestacion, "GENERADO", null, idUsuario);
+            for (Registro registro : registros) {
+                repositorio.registrarItem(idPaquete, new ItemResultado(
+                        registro.tabla, registro.idRegistro, "GENERADO", "Incluido en el alta"));
+            }
+            return null;
+        });
+        return idPaquete;
+    }
+
+    /** Importa el alta inicial. Solo se admite una vez por instalación. */
+    public ResultadoImportacion importarPaqueteAlta(Path origen) {
+        requerirAlta();
+        PaqueteLeido paquete = leerValidado(origen);
+        if (!ALTA.equals(paquete.tipo)) {
+            throw new SyncException("El archivo seleccionado no es un alta (AL) de la central.");
+        }
+        if (repositorio.configuracion(CLAVE_ACTIVACION) != null) {
+            throw new SyncException("La instalación ya fue activada con un alta; "
+                    + "las actualizaciones viajan por bajada (DN).");
+        }
+        String destino = texto(paquete.manifestacion.get("idDestino"), "");
+        if (!destino.toUpperCase(Locale.ROOT).startsWith("UEB:")) {
+            throw new SyncException("El alta no está dirigida a una UEB: " + destino);
+        }
+        UUID idPaquete = id(paquete.manifestacion.get("idPaquete"));
+        if (repositorio.paqueteYaProcesado(idPaquete)) {
+            return resultadoYaProcesado(idPaquete);
+        }
+        String idActivacion = texto(paquete.alta.get("idActivacion"));
+        if (idActivacion == null || idActivacion.trim().isEmpty()) {
+            throw new SyncException("El alta no incluye el identificador de activación.");
+        }
+        long versionRecibida = Long.parseLong(
+                texto(paquete.manifestacion.get("versionConfiguracion"), "1"));
+        long versionLocal = versionConfiguracionLocal();
+        if (versionRecibida < versionLocal) {
+            registrarRechazo(paquete, "La UEB no aplica una configuración anterior a la ya instalada: "
+                    + "recibida " + versionRecibida + ", local " + versionLocal + ".");
+            return new ResultadoImportacion(idPaquete.toString(), "RECHAZADO",
+                    "Alta rechazado por versión de configuración anterior.");
+        }
+        UUID idLote = id(paquete.manifestacion.get("idLote"));
+        UUID idUsuario = authService.getIdUsuarioAutenticado();
+
+        ResultadoImportacion resultado = transacciones.ejecutar(() -> {
+            ResultadoImportacion acumulado = new ResultadoImportacion(idPaquete.toString(), "APLICADO", "");
+            repositorio.registrarPaquete(paquete.manifestacion, "RECIBIDO", null, idUsuario);
+            repositorio.asegurarRoles(paquete.registros);
+            for (String tabla : SyncEsquema.tablasAltaEnOrden()) {
+                for (Registro registro : paquete.registros) {
+                    if (!tabla.equals(registro.tabla)) {
+                        continue;
+                    }
+                    ItemResultado item = aplicarBajadaUno(registro, idLote);
+                    repositorio.registrarItem(idPaquete, item);
+                    acumulado.items.add(item);
+                }
+            }
+            repositorio.guardarConfiguracion(CLAVE_VERSION_CONFIGURACION, Long.toString(versionRecibida));
+            repositorio.guardarConfiguracion(CLAVE_ACTIVACION, idActivacion);
+            long rechazados = acumulado.cuantos("RECHAZADO");
+            String estado = rechazados > 0 ? "PARCIAL" : "APLICADO";
+            String mensaje = "Alta procesada: aplicados " + acumulado.cuantos("APLICADO")
+                    + ", omitidos " + acumulado.cuantos("OMITIDO")
+                    + ", rechazados " + rechazados + ".";
+            repositorio.actualizarEstadoPaquete(idPaquete, estado, mensaje);
+            acumulado.estado = estado;
+            acumulado.mensaje = mensaje;
+            return acumulado;
+        });
+
+        if (desbloqueoPostRestauracion != null) {
+            desbloqueoPostRestauracion.run();
+        }
+        return resultado;
+    }
+
+    /**
+     * El alta de una instalación sin activar lo completa el administrador inicial
+     * (CU-16, creado por arranque). Una vez activada, solo el Jefe de UEB (CU-08)
+     * tiene acceso a la sincronización.
+     */
+    private void requerirAlta() {
+        if (repositorio.configuracion(CLAVE_ACTIVACION) == null) {
+            requerir(CasoUso.CU_16);
+        } else {
+            requerirLocal(CasoUso.CU_08);
+        }
+    }
+
+    private void registrarRechazo(PaqueteLeido paquete, String motivo) {
+        UUID idPaquete = id(paquete.manifestacion.get("idPaquete"));
+        UUID idUsuario = authService.getIdUsuarioAutenticado();
+        transacciones.ejecutar(() -> {
+            repositorio.registrarPaquete(paquete.manifestacion, "RECHAZADO", motivo, idUsuario);
+            repositorio.actualizarEstadoPaquete(idPaquete, "RECHAZADO", motivo);
+            return null;
+        });
+    }
+
+    private long versionConfiguracionLocal() {
+        String valor = repositorio.configuracion(CLAVE_VERSION_CONFIGURACION);
+        if (valor == null || valor.trim().isEmpty()) {
+            return 1L;
+        }
+        try {
+            return Long.parseLong(valor.trim());
+        } catch (NumberFormatException ex) {
+            throw new SyncException("La configuración local de sincronización está dañada: " + valor);
+        }
+    }
+
+    private long siguienteVersionConfiguracion() {
+        long siguiente = versionConfiguracionLocal() + 1;
+        repositorio.guardarConfiguracion(CLAVE_VERSION_CONFIGURACION, Long.toString(siguiente));
+        return siguiente;
+    }
+
+    public String nombreSugeridoBajada(UUID idUeb) {
+        String codigo = repositorio.codigoUeb(idUeb);
+        if (codigo == null || codigo.trim().isEmpty()) {
+            codigo = shortId(idUeb);
+        }
+        return "AVI_DN_" + codigo + "_" + (repositorio.ultimaSecuencia(idUeb, "DN") + 1)
+                + "_" + marcaTiempo() + ".avipkg";
+    }
+
+    public String nombreSugeridoAlta(UUID idUeb) {
+        String codigo = repositorio.codigoUeb(idUeb);
+        if (codigo == null || codigo.trim().isEmpty()) {
+            codigo = shortId(idUeb);
+        }
+        return "AVI_AL_" + codigo + "_" + shortId(UUID.randomUUID())
+                + "_" + marcaTiempo() + ".avipkg";
+    }
+
+    private static String marcaTiempo() {
+        return LocalDateTime.now().toString().replace("-", "").replace(":", "")
+                .replace("T", "-").substring(0, 13);
+    }
+
+    private static String shortId(UUID valor) {
+        return valor == null ? "00000000"
+                : valor.toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    private static Long parseLongNullable(String valor) {
+        if (valor == null || valor.trim().isEmpty()) {
+            return null;
+        }
+        return Long.parseLong(valor.trim());
+    }
+
+    // -------------------------------------------------------------------------
     // Consultas y validación común
     // -------------------------------------------------------------------------
 
@@ -396,16 +854,17 @@ public final class SyncService {
                     + texto(manifestacion.get("versionEsquema")));
         }
         String tipo = texto(manifestacion.get("tipo"), "");
-        if (!Arrays.asList(EXPORTACION, CONFIRMACION, CONFLICTOS).contains(tipo)) {
+        if (!Arrays.asList(EXPORTACION, CONFIRMACION, CONFLICTOS, BAJADA, ALTA).contains(tipo)) {
             throw new SyncException("Tipo de paquete no reconocido: " + tipo);
         }
         id(manifestacion.get("idPaquete"));
         id(manifestacion.get("idLote"));
-        Set<String> esperados = EXPORTACION.equals(tipo) ? ENTRADAS_EXPORTACION : ENTRADAS_CONFIRMACION;
+        Set<String> esperados = esperadosDe(tipo);
         if (!entradas.keySet().equals(esperados)) {
             throw new SyncException("El paquete contiene archivos inesperados o incompletos para su tipo.");
         }
-        String nombrePayload = EXPORTACION.equals(tipo) ? "REGISTROS.json" : "CONFIRMACION.json";
+        String nombrePayload = BAJADA.equals(tipo) || ALTA.equals(tipo)
+                ? "CATALOGOS.json" : EXPORTACION.equals(tipo) ? "REGISTROS.json" : "CONFIRMACION.json";
         byte[] payload = entradas.get(nombrePayload);
         if (!SyncArchivo.hashCoincide(texto(manifestacion.get("payloadSha256")), payload)) {
             throw new SyncException("Integridad verificada incorrectamente: el contenido fue modificado o está incompleto.");
@@ -415,29 +874,59 @@ public final class SyncService {
         leido.manifestacion = manifestacion;
         leido.tipo = tipo;
         leido.payload = payload;
-        if (EXPORTACION.equals(tipo)) {
-            Map<String, Object> datos = SyncJson.parsearObjeto(SyncArchivo.texto(payload));
-            Object lista = datos.get("registros");
-            if (!(lista instanceof List)) {
-                throw new SyncException("El paquete no contiene una lista de registros.");
-            }
-            int declarados = Integer.parseInt(texto(manifestacion.get("cantidadRegistros"), "0"));
-            if (((List<?>) lista).size() != declarados) {
-                throw new SyncException("La cantidad de registros declarada no coincide con el contenido.");
-            }
-            if (declarados > 5000) {
-                throw new SyncException("El paquete supera el límite de 5000 registros.");
-            }
-            for (Object elemento : (List<?>) lista) {
-                if (!(elemento instanceof Map)) {
-                    throw new SyncException("Registro con formato inválido.");
-                }
-                leido.registros.add(Registro.desdeMapa(castMapa(elemento)));
-            }
+        if (EXPORTACION.equals(tipo) || BAJADA.equals(tipo) || ALTA.equals(tipo)) {
+            parsearRegistrosCatalogos(leido, payload);
         } else {
             leido.confirmacion = SyncJson.parsearObjeto(SyncArchivo.texto(payload));
         }
+        if (BAJADA.equals(tipo)) {
+            byte[] bytesRecibo = entradas.get("RECIBO.json");
+            if (!SyncArchivo.hashCoincide(texto(manifestacion.get("reciboSha256")), bytesRecibo)) {
+                throw new SyncException("Integridad del recibo verificada incorrectamente.");
+            }
+            leido.recibo = SyncJson.parsearObjeto(SyncArchivo.texto(bytesRecibo));
+        } else if (ALTA.equals(tipo)) {
+            byte[] bytesAlta = entradas.get("ALTA.json");
+            if (!SyncArchivo.hashCoincide(texto(manifestacion.get("altaSha256")), bytesAlta)) {
+                throw new SyncException("Integridad del alta verificada incorrectamente.");
+            }
+            leido.alta = SyncJson.parsearObjeto(SyncArchivo.texto(bytesAlta));
+        }
         return leido;
+    }
+
+    private void parsearRegistrosCatalogos(PaqueteLeido leido, byte[] payload) {
+        Map<String, Object> datos = SyncJson.parsearObjeto(SyncArchivo.texto(payload));
+        Object lista = datos.get("registros");
+        if (!(lista instanceof List)) {
+            throw new SyncException("El paquete no contiene una lista de registros.");
+        }
+        int declarados = Integer.parseInt(texto(leido.manifestacion.get("cantidadRegistros"), "0"));
+        if (((List<?>) lista).size() != declarados) {
+            throw new SyncException("La cantidad de registros declarada no coincide con el contenido.");
+        }
+        if (declarados > 5000) {
+            throw new SyncException("El paquete supera el límite de 5000 registros.");
+        }
+        for (Object elemento : (List<?>) lista) {
+            if (!(elemento instanceof Map)) {
+                throw new SyncException("Registro con formato inválido.");
+            }
+            leido.registros.add(Registro.desdeMapa(castMapa(elemento)));
+        }
+    }
+
+    private static Set<String> esperadosDe(String tipo) {
+        if (EXPORTACION.equals(tipo)) {
+            return ENTRADAS_EXPORTACION;
+        }
+        if (BAJADA.equals(tipo)) {
+            return ENTRADAS_BAJADA;
+        }
+        if (ALTA.equals(tipo)) {
+            return ENTRADAS_ALTA;
+        }
+        return ENTRADAS_CONFIRMACION;
     }
 
     private void requerir(CasoUso... casos) {
@@ -542,6 +1031,8 @@ public final class SyncService {
     public static final class PaqueteLeido {
         public Map<String, Object> manifestacion;
         public Map<String, Object> confirmacion;
+        public Map<String, Object> recibo;
+        public Map<String, Object> alta;
         public String tipo;
         public byte[] payload;
         public final List<Registro> registros = new ArrayList<>();

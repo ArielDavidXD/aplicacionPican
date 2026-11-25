@@ -86,7 +86,7 @@ final class SyncTestSupport {
             parte.setGallinasEnfermas(2);
             parte.setHuevosProducidos(huevos);
             parte.setHuevosRotos(3);
-            parte.setPiensoKg(new BigDecimal("12.500"));
+            parte.setPiensoKg(new BigDecimal("12.50"));
             contexto.getParteNaveService().registrar(parte);
         } finally {
             contexto.usarAutorizacion(original);

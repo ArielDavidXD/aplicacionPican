@@ -15,4 +15,7 @@ public interface ValeEntregaRepository extends Repository<ValeEntrega, UUID> {
     List<ValeEntrega> findByPeriodo(LocalDateTime desde, LocalDateTime hasta);
     List<ValeEntrega> findByUEBOrdenadosPorFecha(UUID idUEB);
     List<ValeEntrega> findByEstado(String estado);
+
+    /** Siguiente número consecutivo para la UEB; nunca retrocede ni se reutiliza. */
+    int siguienteSecuencia(UUID idUEB);
 }

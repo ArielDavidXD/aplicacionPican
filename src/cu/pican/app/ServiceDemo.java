@@ -105,18 +105,18 @@ public class ServiceDemo {
         parteNaveService.registrar(parteValido);
         check(parteNaveRepo.findById(parteValido.getIdParte()).isPresent(), "Parte de nave válido registrado");
 
-        // 6. Rechazar cantidades negativas
+        // 6. Rechazar cantidades negativas (fechas distintas para ejercitar cada validación sin chocar con la unicidad)
         System.out.println("6) Rechazar cantidades negativas");
-        ParteNave negativoHuevos = nuevoParteNave(UUID.randomUUID(), idNave, fecha, null,
+        ParteNave negativoHuevos = nuevoParteNave(UUID.randomUUID(), idNave, fecha.plusDays(1), null,
                 500, 0, 0, -1, 0, new BigDecimal("10"));
         expectValidation(() -> parteNaveService.registrar(negativoHuevos), "Huevos producidos negativos");
-        ParteNave negativoPienso = nuevoParteNave(UUID.randomUUID(), idNave, fecha, null,
+        ParteNave negativoPienso = nuevoParteNave(UUID.randomUUID(), idNave, fecha.plusDays(2), null,
                 500, 0, 0, 100, 0, new BigDecimal("-0.5"));
         expectValidation(() -> parteNaveService.registrar(negativoPienso), "Pienso negativo");
 
         // 7. Rechazar huevos rotos superiores a huevos producidos
         System.out.println("7) Rechazar huevos rotos superiores a producidos");
-        ParteNave rotosMayor = nuevoParteNave(UUID.randomUUID(), idNave, fecha, null,
+        ParteNave rotosMayor = nuevoParteNave(UUID.randomUUID(), idNave, fecha.plusDays(3), null,
                 500, 0, 0, 100, 101, new BigDecimal("10"));
         expectValidation(() -> parteNaveService.registrar(rotosMayor), "Huevos rotos > producidos");
 

@@ -23,14 +23,17 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.io.File;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -48,7 +51,7 @@ public class ReportManagementPanel extends JPanel {
     private final AnalisisService analisisService;
 
     private final JComboBox<String> filtroEstado = new JComboBox<>(
-            new String[]{TODOS, Informe.ESTADO_ELABORADO, Informe.ESTADO_DEVUELTO,
+            new String[]{TODOS, Informe.ESTADO_BORRADOR, Informe.ESTADO_EN_REVISION, Informe.ESTADO_DEVUELTO,
                     Informe.ESTADO_APROBADO, Informe.ESTADO_ENTREGADO});
     private final DataTablePanel tablaInformes = new DataTablePanel("Informes registrados",
             new String[]{"ID", "Número", "Título", "Período", "Elaboración", "Especialista", "Estado", "Rev.", "Vers."},
@@ -89,6 +92,14 @@ public class ReportManagementPanel extends JPanel {
     private final JTextField fechaDecisionField = new JTextField(12);
     private final JTextArea observacionDecisionArea = new JTextArea(2, 32);
 
+    private final JTextArea seccionProduccionMetasArea = new JTextArea(3, 60);
+    private final JTextArea seccionEntregasArea = new JTextArea(3, 60);
+    private final JTextArea seccionInfraestructuraArea = new JTextArea(3, 60);
+    private final JTextArea seccionCalidadDatosArea = new JTextArea(3, 60);
+    private final JTextArea seccionAlertasArea = new JTextArea(3, 60);
+    private final JTextArea seccionCausasMedidasArea = new JTextArea(3, 60);
+    private final JTextArea aprobacionArea = new JTextArea(5, 60);
+
     private final JComboBox<String> destinatarioCombo = new JComboBox<>(
             new String[]{DestinatarioInstitucional.GEGAN.name(), DestinatarioInstitucional.MINAG.name()});
     private final JTextField fechaEntregaField = new JTextField(12);
@@ -96,6 +107,7 @@ public class ReportManagementPanel extends JPanel {
     private final JTextArea observacionesEntregaArea = new JTextArea(2, 32);
 
     private Informe seleccionado;
+    private boolean nuevoEnCurso;
 
     public ReportManagementPanel(AppContext context) {
         this.service = context == null ? null : context.getInformeService();
@@ -159,6 +171,7 @@ public class ReportManagementPanel extends JPanel {
         JTabbedPane tabs = new JTabbedPane();
         tabs.setPreferredSize(new Dimension(900, 320));
         tabs.addTab("Contenido y estado", construirContenidoTab());
+        tabs.addTab("Secciones (2 a 8)", construirSeccionesTab());
         tabs.addTab("Fuentes", construirFuentesTab());
         tabs.addTab("Decisiones", construirDecisionesTab());
         tabs.addTab("Entregas", construirEntregasTab());
@@ -189,6 +202,47 @@ public class ReportManagementPanel extends JPanel {
         resumenArea.setWrapStyleWord(true);
         resumen.add(new JScrollPane(resumenArea), BorderLayout.CENTER);
         panel.add(resumen, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel construirSeccionesTab() {
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.setOpaque(false);
+        JPanel formularioSecciones = new JPanel(new GridBagLayout());
+        formularioSecciones.setOpaque(false);
+        int f = 0;
+        f = addCampo(formularioSecciones, f, "2. Producción frente a metas:", new JScrollPane(seccionProduccionMetasArea));
+        f = addCampo(formularioSecciones, f, "3. Entregas:", new JScrollPane(seccionEntregasArea));
+        f = addCampo(formularioSecciones, f, "4. Infraestructura:", new JScrollPane(seccionInfraestructuraArea));
+        f = addCampo(formularioSecciones, f, "5. Calidad de los datos:", new JScrollPane(seccionCalidadDatosArea));
+        f = addCampo(formularioSecciones, f, "6. Alertas:", new JScrollPane(seccionAlertasArea));
+        f = addCampo(formularioSecciones, f, "7. Causas y medidas:", new JScrollPane(seccionCausasMedidasArea));
+        JLabel aprobacionLabel = new JLabel("8. Aprobación (se compone de las decisiones y entregas registradas):");
+        aprobacionArea.setEditable(false);
+        aprobacionArea.setLineWrap(true);
+        aprobacionArea.setWrapStyleWord(true);
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(4, 6, 4, 6);
+        c.anchor = GridBagConstraints.WEST;
+        c.gridx = 0;
+        c.gridy = f;
+        c.gridwidth = 2;
+        formularioSecciones.add(aprobacionLabel, c);
+        c.gridy = f + 1;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        formularioSecciones.add(new JScrollPane(aprobacionArea), c);
+        panel.add(new JScrollPane(formularioSecciones), BorderLayout.CENTER);
+
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        acciones.setOpaque(false);
+        AppButton guardar = new AppButton("Guardar secciones");
+        guardar.addActionListener(e -> ejecutar(this::guardarSecciones));
+        AppButton enviar = new AppButton("Enviar a revisión");
+        enviar.addActionListener(e -> ejecutar(this::enviarRevision));
+        acciones.add(guardar);
+        acciones.add(enviar);
+        panel.add(acciones, BorderLayout.SOUTH);
         return panel;
     }
 
@@ -267,15 +321,26 @@ public class ReportManagementPanel extends JPanel {
         acciones.setOpaque(false);
         AppButton nuevo = new AppButton("Nuevo informe");
         nuevo.addActionListener(e -> {
+            nuevoEnCurso = true;
             limpiarFormulario();
             formulario.setVisible(true);
             revalidate();
             repaint();
         });
         AppButton guardar = new AppButton("Guardar cambios de contenido");
-        guardar.addActionListener(e -> ejecutar(this::guardarContenido));
+        guardar.addActionListener(e -> ejecutar(() -> {
+            if (nuevoEnCurso) {
+                crearInforme();
+            } else {
+                guardarContenido();
+            }
+        }));
         AppButton revision = new AppButton("Crear nueva revisión");
         revision.addActionListener(e -> ejecutar(this::crearRevision));
+        AppButton exportarPdf = new AppButton("Exportar PDF");
+        exportarPdf.addActionListener(e -> ejecutar(() -> exportar(true)));
+        AppButton exportarExcel = new AppButton("Exportar Excel");
+        exportarExcel.addActionListener(e -> ejecutar(() -> exportar(false)));
         AppButton ocultar = new AppButton("Ocultar formulario");
         ocultar.addActionListener(e -> {
             formulario.setVisible(false);
@@ -285,6 +350,8 @@ public class ReportManagementPanel extends JPanel {
         acciones.add(nuevo);
         acciones.add(guardar);
         acciones.add(revision);
+        acciones.add(exportarPdf);
+        acciones.add(exportarExcel);
         acciones.add(ocultar);
         return acciones;
     }
@@ -346,6 +413,14 @@ public class ReportManagementPanel extends JPanel {
         periodoLabel.setText(seleccionado.getPeriodoAnalizado());
         especialistaLabel.setText(seleccionado.getEspecialistaResponsable());
         resumenArea.setText(seleccionado.getContenidoResumen());
+        seccionProduccionMetasArea.setText(seleccionado.getSeccionProduccionMetas());
+        seccionEntregasArea.setText(seleccionado.getSeccionEntregas());
+        seccionInfraestructuraArea.setText(seleccionado.getSeccionInfraestructura());
+        seccionCalidadDatosArea.setText(seleccionado.getSeccionCalidadDatos());
+        seccionAlertasArea.setText(seleccionado.getSeccionAlertas());
+        seccionCausasMedidasArea.setText(seleccionado.getSeccionCausasMedidas());
+        Map<String, String> secciones = service.componerSecciones(seleccionado.getIdInforme());
+        aprobacionArea.setText(secciones.getOrDefault("8. Aprobación", "(sin decisión registrada)"));
 
         List<Object[]> filasFuentes = new ArrayList<>();
         for (FuenteInforme f : service.consultarFuentes(seleccionado.getIdInforme())) {
@@ -373,9 +448,11 @@ public class ReportManagementPanel extends JPanel {
         service.crearInforme(numeroField.getText(), tituloField.getText(),
                 fecha(desdeField, "desde"), fecha(hastaField, "hasta"),
                 fecha(elaboracionField, "elaboración"), especialistaField.getText(), contenidoArea.getText());
+        nuevoEnCurso = false;
         formulario.setVisible(false);
         refrescar();
-        MessageHelper.showInfo(this, "El informe quedó registrado en estado ELABORADO.");
+        MessageHelper.showInfo(this, "El informe quedó registrado en estado BORRADOR. "
+                + "Complete las secciones 2 a 7 y envíelo a revisión.");
     }
 
     private void guardarContenido() {
@@ -395,6 +472,43 @@ public class ReportManagementPanel extends JPanel {
         refrescar();
         MessageHelper.showInfo(this, "Se creó la revisión " + revision.getNumeroRevision()
                 + ". El informe anterior se conserva sin cambios.");
+    }
+
+    private void guardarSecciones() {
+        requerirSeleccion();
+        service.guardarSecciones(seleccionado.getIdInforme(), seccionProduccionMetasArea.getText(),
+                seccionEntregasArea.getText(), seccionInfraestructuraArea.getText(),
+                seccionCalidadDatosArea.getText(), seccionAlertasArea.getText(),
+                seccionCausasMedidasArea.getText());
+        refrescar();
+        MessageHelper.showInfo(this, "Las secciones 2 a 7 quedaron guardadas.");
+    }
+
+    private void enviarRevision() {
+        requerirSeleccion();
+        service.enviarARevision(seleccionado.getIdInforme());
+        refrescar();
+        MessageHelper.showInfo(this, "El informe quedó EN REVISIÓN para la decisión del directivo.");
+    }
+
+    private void exportar(boolean pdf) {
+        requerirSeleccion();
+        String nombre = "informe-" + (seleccionado.getNumeroInforme() == null
+                ? corto(seleccionado.getIdInforme()) : seleccionado.getNumeroInforme())
+                + "-r" + seleccionado.getNumeroRevision();
+        JFileChooser selector = new JFileChooser();
+        selector.setDialogTitle("Ubicación de destino del " + (pdf ? "PDF" : "Excel"));
+        selector.setSelectedFile(new File(nombre + (pdf ? ".pdf" : ".xlsx")));
+        if (selector.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        java.nio.file.Path destino = selector.getSelectedFile().toPath();
+        if (pdf) {
+            service.exportarPdf(destino, seleccionado.getIdInforme());
+        } else {
+            service.exportarExcel(destino, seleccionado.getIdInforme());
+        }
+        MessageHelper.showInfo(this, "Exportación completada:\n" + destino.toAbsolutePath());
     }
 
     private void cargarOpcionesFuentes() {

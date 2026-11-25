@@ -99,6 +99,9 @@ tmp/
 # Configuración local y credenciales
 # ==========================================
 
+# Configuración real de la BD local (nunca versionar credenciales)
+config/pican.properties
+
 .env
 .env.*
 !.env.example

@@ -17,6 +17,7 @@ import cu.pican.view.components.UITheme;
 import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -80,6 +81,7 @@ public class EggProductionModulePanel extends JPanel {
     private final Map<String, UUID> naveFilterLabelToId = new HashMap<>();
 
     private UUID selectedParteId;
+    private String estadoSeleccionado;
 
     public EggProductionModulePanel(AppContext context) {
         this.parteNaveService = context.getParteNaveService();
@@ -91,11 +93,11 @@ public class EggProductionModulePanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
         add(new ModuleHeader("Producción de huevos (naves)",
-                "Registro, consulta y edición de partes diarios de naves (datos en memoria). " +
+                "Registro diario de partes por nave, con borradores (BORRADOR) y partes oficiales (REGISTRADO). " +
                         "Pendiente: partes de unidades asociadas según formulario real (sin campos inventados)."), BorderLayout.NORTH);
 
         String[] cols = {"Fecha de producción", "UEB", "Nave", "Gallinas vivas", "Gallinas muertas",
-                "Gallinas enfermas", "Huevos producidos", "Huevos rotos", "Pienso (kg)"};
+                "Gallinas enfermas", "Huevos producidos", "Huevos rotos", "Huevos buenos", "Pienso (kg)", "Estado"};
         tablePanel = new DataTablePanel("Partes de producción registrados", cols, new Object[0][0]);
         tablePanel.getTable().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tablePanel.getTable().getSelectionModel().addListSelectionListener(e -> {
@@ -213,24 +215,40 @@ public class EggProductionModulePanel extends JPanel {
         actions.setOpaque(false);
         AppButton nuevoBtn = new AppButton("Nuevo");
         AppButton registrarBtn = new AppButton("Registrar");
+        AppButton borradorBtn = new AppButton("Guardar borrador");
         AppButton actualizarBtn = new AppButton("Actualizar");
         AppButton consultarBtn = new AppButton("Consultar selección");
         nuevoBtn.addActionListener(e -> limpiarFormulario());
-        registrarBtn.addActionListener(e -> registrar());
+        registrarBtn.addActionListener(e -> guardar(ParteNave.ESTADO_REGISTRADO));
+        borradorBtn.addActionListener(e -> guardar(ParteNave.ESTADO_BORRADOR));
         actualizarBtn.addActionListener(e -> actualizar());
         consultarBtn.addActionListener(e -> consultarSeleccion());
         actions.add(nuevoBtn);
         actions.add(registrarBtn);
+        actions.add(borradorBtn);
         actions.add(actualizarBtn);
         actions.add(consultarBtn);
         return actions;
     }
 
-    private void registrar() {
+    /** Guarda el parte con el estado indicado: crea si el formulario está limpio o actualiza si hay selección. */
+    private void guardar(String estado) {
         try {
-            ParteNave parte = buildParteFromForm(UUID.randomUUID());
-            parteNaveService.registrar(parte);
-            MessageHelper.showInfo(this, "Parte de producción registrado correctamente.");
+            ParteNave parte = buildParteFromForm(
+                    selectedParteId != null ? selectedParteId : UUID.randomUUID(), estado);
+            if (!confirmarSiProducidosSuperanVivas(parte)) {
+                return;
+            }
+            if (selectedParteId != null) {
+                parteNaveService.actualizar(parte);
+                MessageHelper.showInfo(this, "Parte actualizado correctamente con estado " + estado + ".");
+            } else if (ParteNave.ESTADO_REGISTRADO.equals(estado)) {
+                parteNaveService.registrar(parte);
+                MessageHelper.showInfo(this, "Parte de producción registrado correctamente.");
+            } else {
+                parteNaveService.guardarBorrador(parte);
+                MessageHelper.showInfo(this, "Borrador guardado correctamente.");
+            }
             limpiarFormulario();
             refrescarTabla(parteNaveService.listarTodos());
         } catch (ValidacionException ex) {
@@ -238,7 +256,7 @@ public class EggProductionModulePanel extends JPanel {
         } catch (IllegalArgumentException ex) {
             MessageHelper.showValidation(this, ex.getMessage());
         } catch (Exception ex) {
-            MessageHelper.showValidation(this, "No se pudo registrar el parte: " + ex.getMessage());
+            MessageHelper.showValidation(this, "No se pudo guardar el parte: " + ex.getMessage());
         }
     }
 
@@ -248,7 +266,11 @@ public class EggProductionModulePanel extends JPanel {
             return;
         }
         try {
-            ParteNave parte = buildParteFromForm(selectedParteId);
+            ParteNave parte = buildParteFromForm(selectedParteId,
+                    estadoSeleccionado != null ? estadoSeleccionado : ParteNave.ESTADO_REGISTRADO);
+            if (!confirmarSiProducidosSuperanVivas(parte)) {
+                return;
+            }
             parteNaveService.actualizar(parte);
             MessageHelper.showInfo(this, "Parte de producción actualizado correctamente (UUID conservado).");
             refrescarTabla(parteNaveService.listarTodos());
@@ -261,7 +283,22 @@ public class EggProductionModulePanel extends JPanel {
         }
     }
 
-    private ParteNave buildParteFromForm(UUID idParte) {
+    /** CU-05: si los huevos producidos superan a las gallinas vivas, se avisa pero se permite confirmar. */
+    private boolean confirmarSiProducidosSuperanVivas(ParteNave parte) {
+        Integer vivas = parte.getGallinasVivas();
+        Integer producidos = parte.getHuevosProducidos();
+        if (vivas != null && producidos != null && producidos > vivas) {
+            int opcion = JOptionPane.showConfirmDialog(this,
+                    "Los huevos producidos (" + producidos + ") superan las gallinas vivas (" + vivas
+                            + ").\nEl sistema lo permite, pero confirme que el dato es correcto.",
+                    "Aviso: huevos producidos superan gallinas vivas",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+            return opcion == JOptionPane.OK_OPTION;
+        }
+        return true;
+    }
+
+    private ParteNave buildParteFromForm(UUID idParte, String estado) {
         ParteNave parte = new ParteNave();
         parte.setIdParte(idParte);
         parte.setIdNave(getSelectedId(naveFormCombo, naveFormLabelToId));
@@ -274,9 +311,9 @@ public class EggProductionModulePanel extends JPanel {
         parte.setPiensoKg(parseBigDecimal(piensoKgField.getText(), "Pienso (kg)"));
         String obs = observacionesArea.getText();
         parte.setObservaciones(obs != null && !obs.trim().isEmpty() ? obs.trim() : null);
+        parte.setEstado(estado);
         parte.setCreadoEn(LocalDateTime.now());
         parte.setVersion(1L);
-        // idUsuario y estado no se gestionan en esta etapa de UI.
         return parte;
     }
 
@@ -304,6 +341,7 @@ public class EggProductionModulePanel extends JPanel {
 
     private void cargarEnFormulario(ParteNave parte) {
         selectedParteId = parte.getIdParte();
+        estadoSeleccionado = parte.getEstado();
         // Seleccionar UEB según la nave del parte
         Nave nave = parte.getIdNave() != null ? naveService.buscarPorId(parte.getIdNave()).orElse(null) : null;
         if (nave != null) {
@@ -326,6 +364,7 @@ public class EggProductionModulePanel extends JPanel {
 
     private void limpiarFormulario() {
         selectedParteId = null;
+        estadoSeleccionado = null;
         if (uebFormCombo.getItemCount() > 0) uebFormCombo.setSelectedIndex(0);
         cargarNavesFormParaUeb(getSelectedId(uebFormCombo, uebLabelToId));
         fechaField.setText("");
@@ -412,7 +451,9 @@ public class EggProductionModulePanel extends JPanel {
                     toText(p.getGallinasEnfermas()),
                     toText(p.getHuevosProducidos()),
                     toText(p.getHuevosRotos()),
-                    toText(p.getPiensoKg())
+                    toText(p.getHuevosBuenos()),
+                    toText(p.getPiensoKg()),
+                    safe(p.getEstado())
             });
         }
     }

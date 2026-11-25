@@ -1,5 +1,7 @@
 package cu.pican.service;
 
+import cu.pican.export.ExportadorPdf;
+import cu.pican.export.ExportadorXlsx;
 import cu.pican.model.DecisionDirectivo;
 import cu.pican.model.DestinatarioInstitucional;
 import cu.pican.model.EntregaInforme;
@@ -18,17 +20,21 @@ import cu.pican.repository.InformeRepository;
 import cu.pican.persistence.NoOpTransactionManager;
 import cu.pican.persistence.TransactionManager;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * CU-15: elaboración, decisión, entrega y consulta de informes estadísticos.
- * No genera documentos PDF/Excel, no crea usuarios para el directivo y no duplica los cálculos del CU-14:
- * las opciones de fuente se obtienen exclusivamente desde AnalisisService.
+ * El informe se estructura en ocho secciones (resumen, producción frente a metas, entregas,
+ * infraestructura, calidad de los datos, alertas, causas y medidas, y aprobación) y se exporta
+ * a PDF o Excel. Las opciones de fuente se obtienen exclusivamente desde AnalisisService.
  */
 public class InformeService extends ServicioAutorizado {
 
@@ -89,7 +95,7 @@ public class InformeService extends ServicioAutorizado {
         informe.setIdUsuario(UsuarioSesionSupport.resolver(proveedorSesion, null));
         aplicarDatosInforme(informe, titulo, periodoDesde, periodoHasta, fechaElaboracion,
                 especialistaResponsable, contenidoResumen);
-        informe.setEstado(Informe.ESTADO_ELABORADO);
+        informe.setEstado(Informe.ESTADO_BORRADOR);
         informe.setFechaCreacion(LocalDateTime.now());
         informe.setVersion(1L);
         informe.setNumeroRevision(1);
@@ -132,7 +138,8 @@ public class InformeService extends ServicioAutorizado {
         revision.setIdUsuario(UsuarioSesionSupport.resolver(proveedorSesion, null));
         aplicarDatosInforme(revision, titulo, periodoDesde, periodoHasta, fechaElaboracion,
                 especialistaResponsable, contenidoResumen);
-        revision.setEstado(Informe.ESTADO_ELABORADO);
+        copiarSecciones(anterior, revision);
+        revision.setEstado(Informe.ESTADO_BORRADOR);
         revision.setFechaCreacion(LocalDateTime.now());
         revision.setVersion(1L);
         revision.setNumeroRevision((anterior.getNumeroRevision() == null ? 1 : anterior.getNumeroRevision()) + 1);
@@ -156,8 +163,9 @@ public class InformeService extends ServicioAutorizado {
         Informe actual = informeRepository.findById(idInforme)
                 .orElseThrow(() -> new ValidacionException("El informe indicado no existe."));
         if (Informe.ESTADO_ENTREGADO.equals(actual.getEstado())
-                || Informe.ESTADO_APROBADO.equals(actual.getEstado())) {
-            throw new ValidacionException("Un informe aprobado o entregado no se modifica directamente; cree una nueva revisión.");
+                || Informe.ESTADO_APROBADO.equals(actual.getEstado())
+                || Informe.ESTADO_EN_REVISION.equals(actual.getEstado())) {
+            throw new ValidacionException("Solo se edita el contenido de un informe en BORRADOR o DEVUELTO.");
         }
         validarDatosInforme(titulo, periodoDesde, periodoHasta, fechaElaboracion,
                 especialistaResponsable, contenidoResumen);
@@ -239,6 +247,164 @@ public class InformeService extends ServicioAutorizado {
         return out;
     }
 
+    // -------------------- Secciones y flujo de revisión --------------------
+
+    /** Guarda las secciones 2 a 7. La 1 (resumen) se edita con actualizarContenido; la 8 se compone al exportar. */
+    public Informe guardarSecciones(UUID idInforme, String produccionMetas, String entregas,
+                                    String infraestructura, String calidadDatos, String alertas,
+                                    String causasMedidas) {
+        autorizacion().requerir(CasoUso.CU_15);
+        ValidationUtils.requireUuid(idInforme, "El informe es obligatorio.");
+        Informe actual = informeRepository.findById(idInforme)
+                .orElseThrow(() -> new ValidacionException("El informe indicado no existe."));
+        validarInformeEditable(actual);
+        Informe copia = copiar(actual);
+        copia.setSeccionProduccionMetas(textoOpcional(produccionMetas));
+        copia.setSeccionEntregas(textoOpcional(entregas));
+        copia.setSeccionInfraestructura(textoOpcional(infraestructura));
+        copia.setSeccionCalidadDatos(textoOpcional(calidadDatos));
+        copia.setSeccionAlertas(textoOpcional(alertas));
+        copia.setSeccionCausasMedidas(textoOpcional(causasMedidas));
+        copia.setVersion((actual.getVersion() == null ? 1L : actual.getVersion()) + 1);
+        return informeRepository.update(copia);
+    }
+
+    /** Envía el borrador a revisión del directivo; exige que las siete secciones redactables estén completas. */
+    public Informe enviarARevision(UUID idInforme) {
+        autorizacion().requerir(CasoUso.CU_15);
+        ValidationUtils.requireUuid(idInforme, "El informe es obligatorio.");
+        Informe actual = informeRepository.findById(idInforme)
+                .orElseThrow(() -> new ValidacionException("El informe indicado no existe."));
+        if (!Informe.ESTADO_BORRADOR.equals(actual.getEstado())) {
+            throw new ValidacionException("Solo un informe en BORRADOR se puede enviar a revisión.");
+        }
+        if (actual.getContenidoResumen() == null || actual.getContenidoResumen().trim().isEmpty()
+                || actual.getSeccionProduccionMetas() == null || actual.getSeccionProduccionMetas().trim().isEmpty()
+                || actual.getSeccionEntregas() == null || actual.getSeccionEntregas().trim().isEmpty()
+                || actual.getSeccionInfraestructura() == null || actual.getSeccionInfraestructura().trim().isEmpty()
+                || actual.getSeccionCalidadDatos() == null || actual.getSeccionCalidadDatos().trim().isEmpty()
+                || actual.getSeccionAlertas() == null || actual.getSeccionAlertas().trim().isEmpty()
+                || actual.getSeccionCausasMedidas() == null || actual.getSeccionCausasMedidas().trim().isEmpty()) {
+            throw new ValidacionException("El informe está incompleto: redacte el resumen y las secciones 2 a 7 antes de enviarlo a revisión.");
+        }
+        Informe copia = copiar(actual);
+        copia.setEstado(Informe.ESTADO_EN_REVISION);
+        copia.setVersion((actual.getVersion() == null ? 1L : actual.getVersion()) + 1);
+        return informeRepository.update(copia);
+    }
+
+    /**
+     * Compone las ocho secciones del informe. La sección 8 (aprobación) se deriva de las
+     * decisiones y entregas registradas; no se almacena como texto libre.
+     */
+    public Map<String, String> componerSecciones(UUID idInforme) {
+        autorizacion().requerir(CasoUso.CU_15);
+        Informe informe = buscarPorId(idInforme);
+        Map<String, String> secciones = new LinkedHashMap<>();
+        secciones.put("1. Resumen", textoSeccion(informe.getContenidoResumen()));
+        secciones.put("2. Producción frente a metas", textoSeccion(informe.getSeccionProduccionMetas()));
+        secciones.put("3. Entregas", textoSeccion(informe.getSeccionEntregas()));
+        secciones.put("4. Infraestructura", textoSeccion(informe.getSeccionInfraestructura()));
+        secciones.put("5. Calidad de los datos", textoSeccion(informe.getSeccionCalidadDatos()));
+        secciones.put("6. Alertas", textoSeccion(informe.getSeccionAlertas()));
+        secciones.put("7. Causas y medidas", textoSeccion(informe.getSeccionCausasMedidas()));
+        secciones.put("8. Aprobación", componerAprobacion(idInforme));
+        return secciones;
+    }
+
+    private String componerAprobacion(UUID idInforme) {
+        List<DecisionDirectivo> decisiones = new ArrayList<>(decisionRepository.findByIdInforme(idInforme));
+        decisiones.sort(Comparator.comparingInt(d -> d.getNumeroDecision() == null ? 0 : d.getNumeroDecision()));
+        List<EntregaInforme> entregas = new ArrayList<>(entregaRepository.findByIdInforme(idInforme));
+        if (decisiones.isEmpty() && entregas.isEmpty()) {
+            return "Sin decisión ni entrega registradas.";
+        }
+        StringBuilder texto = new StringBuilder();
+        for (DecisionDirectivo d : decisiones) {
+            texto.append("Decisión ").append(d.getNumeroDecision() == null ? "-" : d.getNumeroDecision())
+                    .append(": ").append(d.getDecision())
+                    .append(" de ").append(d.getNombreDirectivo())
+                    .append(d.getFechaDecision() == null ? "" : " (" + d.getFechaDecision() + ")")
+                    .append(d.getObservacion() == null ? "" : ". Observación: " + d.getObservacion())
+                    .append(".\n");
+        }
+        for (EntregaInforme e : entregas) {
+            texto.append("Entregado a ").append(e.getDestinatario())
+                    .append(e.getFechaEntrega() == null ? "" : " el " + e.getFechaEntrega())
+                    .append(" (registrado por ").append(e.getResponsableRegistro()).append(").\n");
+        }
+        return texto.toString().trim();
+    }
+
+    private String textoSeccion(String contenido) {
+        return contenido == null || contenido.trim().isEmpty() ? "(sin redactar)" : contenido.trim();
+    }
+
+    private String textoOpcional(String contenido) {
+        return contenido == null || contenido.trim().isEmpty() ? "" : contenido.trim();
+    }
+
+    private void copiarSecciones(Informe origen, Informe destino) {
+        destino.setSeccionProduccionMetas(origen.getSeccionProduccionMetas());
+        destino.setSeccionEntregas(origen.getSeccionEntregas());
+        destino.setSeccionInfraestructura(origen.getSeccionInfraestructura());
+        destino.setSeccionCalidadDatos(origen.getSeccionCalidadDatos());
+        destino.setSeccionAlertas(origen.getSeccionAlertas());
+        destino.setSeccionCausasMedidas(origen.getSeccionCausasMedidas());
+    }
+
+    // -------------------- Exportación PDF / Excel --------------------
+
+    public void exportarPdf(Path destino, UUID idInforme) {
+        autorizacion().requerir(CasoUso.CU_15);
+        Informe informe = buscarPorId(idInforme);
+        List<ExportadorPdf.Seccion> secciones = new ArrayList<>();
+        secciones.add(new ExportadorPdf.Seccion("Identificación del informe",
+                new String[]{"Campo", "Valor"},
+                List.of(
+                        new Object[]{"Número", nulo(informe.getNumeroInforme())},
+                        new Object[]{"Título", nulo(informe.getTitulo())},
+                        new Object[]{"Período analizado", informe.getPeriodoAnalizado()},
+                        new Object[]{"Fecha de elaboración", nulo(informe.getFechaElaboracion())},
+                        new Object[]{"Especialista responsable", nulo(informe.getEspecialistaResponsable())},
+                        new Object[]{"Revisión", nulo(informe.getNumeroRevision())},
+                        new Object[]{"Estado", nulo(informe.getEstado())})));
+        for (Map.Entry<String, String> seccion : componerSecciones(idInforme).entrySet()) {
+            List<Object[]> filas = new ArrayList<>();
+            for (String parrafo : seccion.getValue().split("\n")) {
+                if (!parrafo.trim().isEmpty()) {
+                    filas.add(new Object[]{parrafo.trim()});
+                }
+            }
+            if (filas.isEmpty()) {
+                filas.add(new Object[]{"(sin contenido)"});
+            }
+            secciones.add(new ExportadorPdf.Seccion(seccion.getKey(), new String[]{"Detalle"}, filas));
+        }
+        ExportadorPdf.escribir(destino, "Informe " + nulo(informe.getNumeroInforme()) + " - " + nulo(informe.getTitulo()), secciones);
+    }
+
+    public void exportarExcel(Path destino, UUID idInforme) {
+        autorizacion().requerir(CasoUso.CU_15);
+        Informe informe = buscarPorId(idInforme);
+        ExportadorXlsx.Libro libro = new ExportadorXlsx.Libro();
+        libro.hoja("Identificación", new String[]{"Campo", "Valor"},
+                List.of(
+                        new Object[]{"Número", nulo(informe.getNumeroInforme())},
+                        new Object[]{"Título", nulo(informe.getTitulo())},
+                        new Object[]{"Período analizado", informe.getPeriodoAnalizado()},
+                        new Object[]{"Fecha de elaboración", nulo(informe.getFechaElaboracion())},
+                        new Object[]{"Especialista responsable", nulo(informe.getEspecialistaResponsable())},
+                        new Object[]{"Revisión", nulo(informe.getNumeroRevision())},
+                        new Object[]{"Estado", nulo(informe.getEstado())}));
+        List<Object[]> filasSecciones = new ArrayList<>();
+        for (Map.Entry<String, String> seccion : componerSecciones(idInforme).entrySet()) {
+            filasSecciones.add(new Object[]{seccion.getKey(), seccion.getValue()});
+        }
+        libro.hoja("Secciones", new String[]{"Sección", "Contenido"}, filasSecciones);
+        libro.escribir(destino);
+    }
+
     // -------------------- Decisión del directivo --------------------
 
     public DecisionDirectivo registrarDecision(UUID idInforme, String nombreDirectivo, String decision,
@@ -261,8 +427,8 @@ public class InformeService extends ServicioAutorizado {
         if (Informe.ESTADO_DEVUELTO.equals(estado)) {
             throw new ValidacionException("El informe fue devuelto; cree una nueva revisión para otra decisión.");
         }
-        if (!Informe.ESTADO_ELABORADO.equals(estado)) {
-            throw new ValidacionException("Solo se puede decidir sobre un informe ELABORADO.");
+        if (!Informe.ESTADO_EN_REVISION.equals(estado)) {
+            throw new ValidacionException("Solo se puede decidir sobre un informe EN REVISIÓN.");
         }
         ValidationUtils.requireNotBlank(nombreDirectivo, "El nombre del directivo es obligatorio.");
         ValidationUtils.requireNonNull(fechaDecision, "La fecha de la decisión es obligatoria.");
@@ -402,8 +568,9 @@ public class InformeService extends ServicioAutorizado {
 
     private void validarInformeEditable(Informe informe) {
         if (Informe.ESTADO_APROBADO.equals(informe.getEstado())
-                || Informe.ESTADO_ENTREGADO.equals(informe.getEstado())) {
-            throw new ValidacionException("Un informe aprobado o entregado no admite cambios en sus fuentes.");
+                || Informe.ESTADO_ENTREGADO.equals(informe.getEstado())
+                || Informe.ESTADO_EN_REVISION.equals(informe.getEstado())) {
+            throw new ValidacionException("Un informe que no está en BORRADOR o DEVUELTO no admite cambios en sus fuentes.");
         }
     }
 
@@ -416,6 +583,10 @@ public class InformeService extends ServicioAutorizado {
             return null;
         }
         return texto.trim();
+    }
+
+    private String nulo(Object valor) {
+        return valor == null ? "-" : String.valueOf(valor);
     }
 
     private Informe copiar(Informe o) {
@@ -431,6 +602,7 @@ public class InformeService extends ServicioAutorizado {
         c.setEspecialistaResponsable(o.getEspecialistaResponsable());
         c.setIdUsuario(o.getIdUsuario());
         c.setContenidoResumen(o.getContenidoResumen());
+        copiarSecciones(o, c);
         c.setEstado(o.getEstado());
         c.setFechaCreacion(o.getFechaCreacion());
         c.setVersion(o.getVersion());
