@@ -1,8 +1,8 @@
 package cu.pican.view.modules;
 
 import cu.pican.model.Destino;
-import cu.pican.service.DestinoService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.DestinoService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

@@ -1,6 +1,6 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.ConsolidadoUEB;
 import cu.pican.model.Destino;
 import cu.pican.model.Informe;
@@ -11,12 +11,13 @@ import cu.pican.model.ProductoDestino;
 import cu.pican.model.ProduccionCarne;
 import cu.pican.model.Recepcion;
 import cu.pican.model.Rol;
+import cu.pican.model.TablaHistorica;
 import cu.pican.model.UEB;
 import cu.pican.model.Usuario;
 import cu.pican.model.ValeEntrega;
-import cu.pican.service.AutorizacionException;
-import cu.pican.service.DashboardService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.AutorizacionException;
+import cu.pican.controller.service.DashboardService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.modules.DashboardModulePanel;
 
@@ -270,15 +271,25 @@ public final class DashboardSmokeTest {
     }
 
     private void verificarProduccion() {
+        // Las referencias oficiales arrancan vacías: el administrador las carga por CU-18.
+        entrarAdmin();
+        String sufijo = UUID.randomUUID().toString().substring(0, 8);
+        contexto.getGestionReferenciasService().registrarIndicador(TablaHistorica.INFRAESTRUCTURA,
+                "Referencia DASH " + sufijo, 2019, new BigDecimal("1"), "U", "Prueba DASH-05");
+        contexto.getGestionReferenciasService().registrarIndicador(TablaHistorica.EFICIENCIA_PRODUCTIVA,
+                "Eficiencia DASH " + sufijo, 2019, new BigDecimal("2.5"), "%", "Prueba DASH-05");
+        contexto.getGestionReferenciasService().registrarMeta("Meta DASH " + sufijo,
+                new BigDecimal("100"), new BigDecimal("150"), null, "t", "Prueba DASH-05");
+
         entrar("dash_prod", CLAVE_PROD);
         DashboardService.Resumen resumen = contexto.getDashboardService().resumir(0);
         comprobar("Resumen de referencias oficiales".equals(resumen.titulo()), "Título de Producción incorrecto");
-        indicador(resumen, 0, "67");
-        indicador(resumen, 1, "2");
+        indicador(resumen, 0, "2");
+        indicador(resumen, 1, "1");
         comprobar(!"Sin datos".equals(resumen.indicadores().get(3).valor()), "No hay año histórico real");
         indicador(resumen, 4, "2");
         indicador(resumen, 5, "2");
-        comprobar(resumen.detalle().size() == 69, "Se esperaban 67 referencias y dos metas");
+        comprobar(resumen.detalle().size() == 3, "Se esperaban dos referencias y una meta");
         comprobar(resumen.detalle().stream().anyMatch(f -> "Meta 2030".equals(f[0])),
                 "Faltan las metas estratégicas");
     }

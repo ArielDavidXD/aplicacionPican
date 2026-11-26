@@ -22,7 +22,7 @@ APROBADA | CTX-PG-03
   Esperado: No se insertan datos de demostración en PostgreSQL
   Obtenido: Se cumplió el resultado esperado
 APROBADA | CTX-PG-04
-  Esperado: Referencias históricas oficiales cargadas de forma idempotente
+  Esperado: Referencias históricas arrancan vacías (las registra el administrador)
   Obtenido: Se cumplió el resultado esperado
 APROBADA | CTX-PG-05
   Esperado: Cuenta administrativa inicial disponible

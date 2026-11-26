@@ -1,6 +1,6 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.view.components.UITheme;
 
 import java.awt.BorderLayout;

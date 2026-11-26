@@ -1,6 +1,6 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.DecisionDirectivo;
 import cu.pican.model.DestinatarioInstitucional;
 import cu.pican.model.EntregaInforme;
@@ -8,9 +8,11 @@ import cu.pican.model.FuenteInforme;
 import cu.pican.model.Informe;
 import cu.pican.model.OpcionFuente;
 import cu.pican.model.TipoFuenteInforme;
-import cu.pican.service.AnalisisService;
-import cu.pican.service.InformeService;
-import cu.pican.service.ValidacionException;
+import cu.pican.model.Usuario;
+import cu.pican.controller.service.AnalisisService;
+import cu.pican.controller.service.AuthService;
+import cu.pican.controller.service.InformeService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;
@@ -49,6 +51,7 @@ public class ReportManagementPanel extends JPanel {
 
     private final InformeService service;
     private final AnalisisService analisisService;
+    private final AuthService authService;
 
     private final JComboBox<String> filtroEstado = new JComboBox<>(
             new String[]{TODOS, Informe.ESTADO_BORRADOR, Informe.ESTADO_EN_REVISION, Informe.ESTADO_DEVUELTO,
@@ -112,6 +115,7 @@ public class ReportManagementPanel extends JPanel {
     public ReportManagementPanel(AppContext context) {
         this.service = context == null ? null : context.getInformeService();
         this.analisisService = context == null ? null : context.getAnalisisService();
+        this.authService = context == null ? null : context.getAuthService();
 
         setLayout(new BorderLayout(0, 10));
         setBackground(UITheme.CONTENT_BG);
@@ -413,6 +417,9 @@ public class ReportManagementPanel extends JPanel {
         periodoLabel.setText(seleccionado.getPeriodoAnalizado());
         especialistaLabel.setText(seleccionado.getEspecialistaResponsable());
         resumenArea.setText(seleccionado.getContenidoResumen());
+        if (!nuevoEnCurso) {
+            cargarFormulario(seleccionado);
+        }
         seccionProduccionMetasArea.setText(seleccionado.getSeccionProduccionMetas());
         seccionEntregasArea.setText(seleccionado.getSeccionEntregas());
         seccionInfraestructuraArea.setText(seleccionado.getSeccionInfraestructura());
@@ -611,6 +618,40 @@ public class ReportManagementPanel extends JPanel {
         elaboracionField.setText(LocalDate.now().toString());
         especialistaField.setText("");
         contenidoArea.setText("");
+        precargarEspecialistaSesion();
+    }
+
+    /** Al seleccionar un informe, sus datos pasan al formulario para poder editarlos sin teclearlos de nuevo. */
+    private void cargarFormulario(Informe informe) {
+        numeroField.setText(texto(informe.getNumeroInforme()));
+        tituloField.setText(texto(informe.getTitulo()));
+        desdeField.setText(informe.getPeriodoDesde() == null ? "" : informe.getPeriodoDesde().toString());
+        hastaField.setText(informe.getPeriodoHasta() == null ? "" : informe.getPeriodoHasta().toString());
+        elaboracionField.setText(informe.getFechaElaboracion() == null
+                ? LocalDate.now().toString() : informe.getFechaElaboracion().toString());
+        especialistaField.setText(texto(informe.getEspecialistaResponsable()));
+        contenidoArea.setText(texto(informe.getContenidoResumen()));
+    }
+
+    private void precargarEspecialistaSesion() {
+        if (authService == null) {
+            return;
+        }
+        try {
+            Usuario usuario = authService.getUsuarioAutenticado();
+            if (usuario == null) {
+                return;
+            }
+            String nombre = usuario.getNombreCompleto();
+            especialistaField.setText(nombre == null || nombre.isBlank()
+                    ? usuario.getNombreUsuario() : nombre);
+        } catch (RuntimeException ignored) {
+            // Sin sesión activa no se precarga el especialista.
+        }
+    }
+
+    private String texto(String valor) {
+        return valor == null ? "" : valor;
     }
 
     private String corto(UUID id) {

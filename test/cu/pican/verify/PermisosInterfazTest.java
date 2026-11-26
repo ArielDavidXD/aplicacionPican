@@ -21,22 +21,22 @@ public final class PermisosInterfazTest {
                 "ADMINISTRADOR no debe entrar a sincronización");
         aprobadas++;
         totales++;
-        check(PermisosInterfaz.puedeAcceder("sincronizacion", Rol.JEFE_UEB)
-                && PermisosInterfaz.puedeAcceder("huevos", Rol.JEFE_UEB)
-                && !PermisosInterfaz.puedeAcceder("informes", Rol.JEFE_UEB)
-                && !PermisosInterfaz.puedeAcceder("administracion", Rol.JEFE_UEB),
+        check(Set.of("inicio", "referencias", "huevos", "carne", "consolidacion",
+                        "entregas", "recepcion", "incidencias", "sincronizacion").equals(
+                        PermisosInterfaz.modulosPermitidos(Rol.JEFE_UEB)),
                 "Matriz incorrecta para JEFE_DE_UEB");
         aprobadas++;
         totales++;
-        check(PermisosInterfaz.puedeAcceder("sincronizacion", Rol.ESPECIALISTA_ESTADISTICA)
-                && PermisosInterfaz.puedeAcceder("informes", Rol.ESPECIALISTA_ESTADISTICA)
-                && !PermisosInterfaz.puedeAcceder("huevos", Rol.ESPECIALISTA_ESTADISTICA),
+        check(Set.of("inicio", "referencias", "huevos", "carne", "consolidacion",
+                        "entregas", "recepcion", "incidencias", "informes", "sincronizacion").equals(
+                        PermisosInterfaz.modulosPermitidos(Rol.ESPECIALISTA_ESTADISTICA)),
                 "Matriz incorrecta para ESPECIALISTA_DE_ESTADISTICA");
         aprobadas++;
         totales++;
-        check(Set.of("inicio", "referencias").equals(
-                PermisosInterfaz.modulosPermitidos(Rol.ESPECIALISTA_PRODUCCION)),
-                "ESPECIALISTA_DE_PRODUCCION debe ver inicio y referencias (CU-01 a CU-03)");
+        check(Set.of("inicio", "referencias", "huevos", "carne", "consolidacion",
+                        "entregas", "recepcion", "incidencias", "informes", "sincronizacion").equals(
+                        PermisosInterfaz.modulosPermitidos(Rol.ESPECIALISTA_PRODUCCION)),
+                "ESPECIALISTA_DE_PRODUCCION debe ver referencias y consultas operativas");
         aprobadas++;
         totales++;
         check(PermisosInterfaz.puedeAcceder("administracion", null)

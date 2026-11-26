@@ -1,9 +1,9 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.Usuario;
-import cu.pican.service.CasoUso;
-import cu.pican.service.DashboardService;
+import cu.pican.controller.service.CasoUso;
+import cu.pican.controller.service.DashboardService;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.ModuleHeader;

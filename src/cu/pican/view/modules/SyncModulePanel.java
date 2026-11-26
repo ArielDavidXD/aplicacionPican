@@ -1,12 +1,12 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.Rol;
 import cu.pican.model.UEB;
 import cu.pican.model.Usuario;
-import cu.pican.sync.SyncException;
-import cu.pican.sync.SyncModelo.ResultadoImportacion;
-import cu.pican.sync.SyncService;
+import cu.pican.controller.sync.SyncException;
+import cu.pican.controller.sync.SyncModelo.ResultadoImportacion;
+import cu.pican.controller.sync.SyncService;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

@@ -1,8 +1,8 @@
 package cu.pican.view;
 
-import cu.pican.app.AppContext;
-import cu.pican.service.AuthService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.service.AuthService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.UITheme;
 

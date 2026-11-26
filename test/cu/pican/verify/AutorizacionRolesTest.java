@@ -1,14 +1,16 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.controller.NavigationController;
 import cu.pican.model.Rol;
-import cu.pican.service.AutorizacionException;
-import cu.pican.service.CasoUso;
-import cu.pican.service.ValidacionException;
+import cu.pican.model.TablaHistorica;
+import cu.pican.controller.service.AutorizacionException;
+import cu.pican.controller.service.CasoUso;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.PermisosInterfaz;
 
 import java.awt.CardLayout;
+import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -109,12 +111,13 @@ public final class AutorizacionRolesTest {
         verificar("AUT-08", "Navegación directa: JEFE no entra a administración",
                 () -> !navegacionPermite(Rol.JEFE_UEB, "administracion")
                         && navegacionPermite(Rol.JEFE_UEB, "huevos"));
-        verificar("AUT-09", "Navegación directa: ESTADÍSTICA no entra a producción",
-                () -> !navegacionPermite(Rol.ESPECIALISTA_ESTADISTICA, "huevos")
+        verificar("AUT-09", "Navegación directa: ESTADÍSTICA consulta producción, no administra",
+                () -> navegacionPermite(Rol.ESPECIALISTA_ESTADISTICA, "huevos")
+                        && !navegacionPermite(Rol.ESPECIALISTA_ESTADISTICA, "administracion")
                         && navegacionPermite(Rol.ESPECIALISTA_ESTADISTICA, "informes"));
-        verificar("AUT-10", "Navegación directa: PRODUCCIÓN ve referencias, no informes",
+        verificar("AUT-10", "Navegación directa: PRODUCCIÓN ve referencias e informes",
                 () -> navegacionPermite(Rol.ESPECIALISTA_PRODUCCION, "referencias")
-                        && !navegacionPermite(Rol.ESPECIALISTA_PRODUCCION, "informes"));
+                        && navegacionPermite(Rol.ESPECIALISTA_PRODUCCION, "informes"));
 
         entrar(contexto, "admin416", CLAVE_ADMIN);
         verificar("AUT-11", "ADMIN no puede registrar partes (CU-05)",
@@ -124,6 +127,14 @@ public final class AutorizacionRolesTest {
         verificar("AUT-13", "ADMIN no puede consultar análisis operativo (CU-14)",
                 () -> rechaza(() -> contexto.getAnalisisService().consultarHuevosPorPeriodo(null, null),
                         AutorizacionException.class));
+
+        // Las referencias oficiales arrancan vacías: el administrador las carga por CU-18
+        // para que las consultas de AUT-18 y AUT-20 tengan contenido real.
+        String sufijoRef = UUID.randomUUID().toString().substring(0, 8);
+        contexto.getGestionReferenciasService().registrarIndicador(TablaHistorica.INFRAESTRUCTURA,
+                "Referencia AUT " + sufijoRef, 2019, new BigDecimal("1"), "U", "Prueba de roles");
+        contexto.getGestionReferenciasService().registrarMeta("Meta AUT " + sufijoRef,
+                new BigDecimal("1"), new BigDecimal("2"), null, "U", "Prueba de roles");
 
         entrar(contexto, "jefe416", CLAVE_JEFE);
         verificar("AUT-14", "JEFE no puede gestionar usuarios (CU-16)",
@@ -145,6 +156,21 @@ public final class AutorizacionRolesTest {
                         AutorizacionException.class));
         verificar("AUT-20", "PRODUCCIÓN sí consulta referencias (CU-01 a CU-03)",
                 () -> !contexto.getAnalisisService().consultarMetas().isEmpty());
+        verificar("AUT-22", "PRODUCCIÓN registra infraestructura (CU-03) y metas (CU-02)",
+                () -> {
+                    String sufijo = UUID.randomUUID().toString().substring(0, 8);
+                    contexto.getGestionReferenciasService().registrarIndicador(
+                            TablaHistorica.INFRAESTRUCTURA, "Infra AUT " + sufijo,
+                            2019, BigDecimal.ONE, "U", "Prueba CU-03");
+                    contexto.getGestionReferenciasService().registrarMeta(
+                            "Meta AUT " + sufijo, BigDecimal.ONE, new BigDecimal("2"),
+                            null, "U", "Prueba CU-02");
+                    return true;
+                });
+        verificar("AUT-23", "PRODUCCIÓN no puede cargar eficiencia productiva (CU-18)",
+                () -> rechaza(() -> contexto.getGestionReferenciasService().registrarIndicador(
+                        TablaHistorica.EFICIENCIA_PRODUCTIVA, "Intento AUT " + sufijoRef,
+                        2019, BigDecimal.ONE, "%", "No autorizado"), AutorizacionException.class));
 
         entrar(contexto, "admin416", CLAVE_ADMIN);
         verificar("AUT-21", "Rechazo por rol no deja escrituras parciales",

@@ -31,6 +31,7 @@ public class ParteNave {
 
     private BigDecimal piensoKg;
     private String observaciones;
+    private boolean advertenciaRevisada;
     private String estado;
     private UUID idUsuario;
     private LocalDateTime creadoEn;
@@ -125,6 +126,14 @@ public class ParteNave {
 
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    public boolean isAdvertenciaRevisada() {
+        return advertenciaRevisada;
+    }
+
+    public void setAdvertenciaRevisada(boolean advertenciaRevisada) {
+        this.advertenciaRevisada = advertenciaRevisada;
     }
 
     public String getEstado() {

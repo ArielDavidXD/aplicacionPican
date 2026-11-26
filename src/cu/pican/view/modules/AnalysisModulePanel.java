@@ -1,8 +1,8 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
-import cu.pican.export.ExportadorPdf;
-import cu.pican.export.ExportadorXlsx;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.export.ExportadorPdf;
+import cu.pican.controller.export.ExportadorXlsx;
 import cu.pican.model.ComparacionMeta;
 import cu.pican.model.IndicadorHistorico;
 import cu.pican.model.MetaEstrategica;
@@ -10,8 +10,8 @@ import cu.pican.model.Nave;
 import cu.pican.model.RegistroAnalisis;
 import cu.pican.model.TablaHistorica;
 import cu.pican.model.UEB;
-import cu.pican.service.AnalisisService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.AnalisisService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.BarChartPanel;
 import cu.pican.view.components.DataTablePanel;

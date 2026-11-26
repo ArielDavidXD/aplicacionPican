@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 
-if (-not (Test-Path (Join-Path $raiz 'out\cu\pican\app\PicanApp.class'))) {
+if (-not (Test-Path (Join-Path $raiz 'out\cu\pican\controller\app\PicanApp.class'))) {
     throw 'No existe la aplicación compilada. Ejecute primero scripts\compilar.ps1'
 }
 
@@ -21,5 +21,5 @@ if ($Modo -eq 'memoria') {
     }
 }
 
-& java -cp "out;lib\*" cu.pican.app.PicanApp
+& java -cp "out;lib\*" cu.pican.controller.app.PicanApp
 exit $LASTEXITCODE

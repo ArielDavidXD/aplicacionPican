@@ -1,5 +1,5 @@
 INFORME DE PRUEBAS TRANSACCIONALES · ETAPA 4.14 · FASE 1
-Base: pican_regresion_415_test
+Base: pican_tx_dcus_20261126_test
 
 APROBADA | TX-01 · Transacción exitosa guarda los cambios
   Esperado: La UEB insertada dentro de la transacción debe existir tras el commit

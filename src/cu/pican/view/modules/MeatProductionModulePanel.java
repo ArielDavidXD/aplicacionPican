@@ -1,11 +1,11 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.ProduccionCarne;
 import cu.pican.model.UEB;
-import cu.pican.service.ProduccionCarneService;
-import cu.pican.service.UEBService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.ProduccionCarneService;
+import cu.pican.controller.service.UEBService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

@@ -2,9 +2,9 @@ package cu.pican.view.modules;
 
 import cu.pican.model.Nave;
 import cu.pican.model.UEB;
-import cu.pican.service.NaveService;
-import cu.pican.service.UEBService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.NaveService;
+import cu.pican.controller.service.UEBService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

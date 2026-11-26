@@ -1,6 +1,6 @@
 package cu.pican.view;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.controller.NavigationController;
 import cu.pican.view.components.UITheme;
 import cu.pican.view.modules.AdminModulePanel;

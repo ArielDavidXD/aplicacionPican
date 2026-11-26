@@ -1,13 +1,13 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
-import cu.pican.app.DemoDataInitializer;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.app.DemoDataInitializer;
 import cu.pican.model.UEB;
-import cu.pican.persistence.NoOpTransactionManager;
-import cu.pican.persistence.JdbcTransactionManager;
-import cu.pican.persistence.PersistenciaException;
-import cu.pican.repository.IndicadorHistoricoRepository;
-import cu.pican.repository.UEBRepository;
+import cu.pican.model.persistence.NoOpTransactionManager;
+import cu.pican.model.persistence.JdbcTransactionManager;
+import cu.pican.model.persistence.PersistenciaException;
+import cu.pican.model.repository.IndicadorHistoricoRepository;
+import cu.pican.model.repository.UEBRepository;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -149,11 +149,11 @@ public final class AppContextIntegrationTest {
             check(!hayDemo, "Aparecieron UEB DEMO- en PostgreSQL");
         });
 
-        verificar("CTX-PG-04", "Referencias históricas oficiales cargadas de forma idempotente", () -> {
+        verificar("CTX-PG-04", "Referencias históricas arrancan vacías (las registra el administrador)", () -> {
             IndicadorHistoricoRepository historical =
                     (IndicadorHistoricoRepository) contexto.getRepositorios().get("IndicadorHistoricoRepository");
-            check(historical != null && !historical.findAll().isEmpty(),
-                    "No se cargaron los indicadores históricos oficiales");
+            check(historical != null && historical.findAll().isEmpty(),
+                    "Las referencias históricas debieron arrancar vacías");
         });
 
         verificar("CTX-PG-05", "Cuenta administrativa inicial disponible", () -> {

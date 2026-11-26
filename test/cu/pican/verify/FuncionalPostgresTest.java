@@ -1,15 +1,16 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.ConsolidadoUEB;
 import cu.pican.model.Informe;
 import cu.pican.model.Nave;
 import cu.pican.model.ParteNave;
 import cu.pican.model.ProduccionCarne;
+import cu.pican.model.TablaHistorica;
 import cu.pican.model.TipoFuenteInforme;
 import cu.pican.model.UEB;
 import cu.pican.model.UnidadAsociada;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.ValidacionException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -33,12 +34,19 @@ import java.util.UUID;
 public final class FuncionalPostgresTest {
 
     private static final String PREFIJO = "FUNTEST-";
+    private static final String CLAVE_ADMIN = "Func416Admin!";
+    private static final String CLAVE_JEFE = "Func416Jefe!";
+    private static final String CLAVE_ESTAD = "Func416Estad!";
+    private static final String CLAVE_PROD = "Func416Prod!";
 
     private final List<Resultado> resultados = new ArrayList<>();
     private AppContext contexto;
     private UUID idUeb;
     private UUID idNave;
     private UUID idInforme;
+    private String usuarioJefe;
+    private String usuarioEstad;
+    private String usuarioProd;
 
     public static void main(String[] args) {
         int salida;
@@ -69,8 +77,21 @@ public final class FuncionalPostgresTest {
         System.setProperty("pican.db.migrate", "true");
         System.setProperty("pican.migrations.dir", System.getProperty("pican.test.migrations", "sql/migrations"));
 
+        System.setProperty("pican.admin.password", CLAVE_ADMIN);
         contexto = new AppContext();
         check(contexto.esPostgresql(), "AppContext no está en modo PostgreSQL");
+
+        // Sesión administrativa para catalogar y crear las cuentas por rol (CU-16/CU-17).
+        contexto.getAuthService().login("admin", CLAVE_ADMIN);
+        String sufijoUsuarios = UUID.randomUUID().toString().substring(0, 8);
+        usuarioJefe = "funtest_jefe_" + sufijoUsuarios;
+        usuarioEstad = "funtest_estad_" + sufijoUsuarios;
+        usuarioProd = "funtest_prod_" + sufijoUsuarios;
+        contexto.getUsuarioService().registrar(usuarioJefe, "Jefe funcional", CLAVE_JEFE, "JEFE_DE_UEB");
+        contexto.getUsuarioService().registrar(usuarioEstad, "Estadística funcional", CLAVE_ESTAD,
+                "ESPECIALISTA_DE_ESTADISTICA");
+        contexto.getUsuarioService().registrar(usuarioProd, "Producción funcional", CLAVE_PROD,
+                "ESPECIALISTA_DE_PRODUCCION");
 
         verificar("FUN-01", "UUID, códigos y baja lógica de UEB/nave/unidad con JDBC", this::fun01Catalogos);
         verificar("FUN-02", "Parte de nave se consulta en análisis con su cantidad exacta", this::fun02Huevos);
@@ -113,6 +134,7 @@ public final class FuncionalPostgresTest {
     }
 
     private void fun02Huevos() {
+        entrar(usuarioJefe, CLAVE_JEFE);
         LocalDate fecha = LocalDate.of(2026, 2, 10);
         ParteNave parte = new ParteNave();
         parte.setIdParte(UUID.randomUUID());
@@ -129,6 +151,7 @@ public final class FuncionalPostgresTest {
         parte.setVersion(1L);
         contexto.getParteNaveService().registrar(parte);
 
+        entrar(usuarioEstad, CLAVE_ESTAD);
         boolean encontrado = contexto.getAnalisisService()
                 .consultarHuevosPorPeriodo(fecha.minusDays(1), fecha.plusDays(1)).stream()
                 .anyMatch(r -> r.getCantidad() != null
@@ -137,6 +160,7 @@ public final class FuncionalPostgresTest {
     }
 
     private void fun03CarneConsolidado() {
+        entrar(usuarioJefe, CLAVE_JEFE);
         LocalDate fecha = LocalDate.of(2026, 2, 15);
         ProduccionCarne carne = new ProduccionCarne();
         carne.setIdProduccion(UUID.randomUUID());
@@ -153,6 +177,7 @@ public final class FuncionalPostgresTest {
         consolidado.setEstado("REGISTRADO");
         contexto.getConsolidadoUEBService().registrar(consolidado);
 
+        entrar(usuarioEstad, CLAVE_ESTAD);
         boolean carneOk = contexto.getAnalisisService()
                 .consultarCarnePorPeriodo(fecha.minusDays(1), fecha.plusDays(1)).stream()
                 .anyMatch(r -> r.getCantidad() != null
@@ -164,13 +189,26 @@ public final class FuncionalPostgresTest {
     }
 
     private void fun04Referencias() {
-        check(contexto.getAnalisisService().consultarTodasLasReferencias().size() == 67,
-                "Se esperaban 67 indicadores históricos oficiales");
-        check(contexto.getAnalisisService().consultarMetas().size() == 2,
-                "Se esperaban 2 metas estratégicas oficiales");
+        // Las tablas oficiales arrancan vacías: el administrador las carga por CU-18
+        // y los especialistas de producción las consultan (CU-01 a CU-03).
+        entrar("admin", CLAVE_ADMIN);
+        String sufijo = UUID.randomUUID().toString().substring(0, 8);
+        contexto.getGestionReferenciasService().registrarIndicador(TablaHistorica.INFRAESTRUCTURA,
+                "Referencia FUN " + sufijo, 2019, new BigDecimal("1"), "U", "Prueba FUN-04");
+        contexto.getGestionReferenciasService().registrarMeta("Meta FUN " + sufijo,
+                new BigDecimal("10"), new BigDecimal("20"), null, "t", "Prueba FUN-04");
+
+        entrar(usuarioProd, CLAVE_PROD);
+        check(contexto.getAnalisisService().consultarTodasLasReferencias().stream()
+                        .anyMatch(h -> ("Referencia FUN " + sufijo).equals(h.getIndicador())),
+                "La consulta oficial no muestra el indicador registrado por el administrador");
+        check(contexto.getAnalisisService().consultarMetas().stream()
+                        .anyMatch(m -> ("Meta FUN " + sufijo).equals(m.getIndicador())),
+                "La consulta oficial no muestra la meta registrada por el administrador");
     }
 
     private void fun05Informe() {
+        entrar(usuarioEstad, CLAVE_ESTAD);
         Informe informe = contexto.getInformeService().crearInforme(
                 PREFIJO + "INF-" + UUID.randomUUID().toString().substring(0, 8),
                 "Informe funcional Etapa 4.14",
@@ -238,8 +276,13 @@ public final class FuncionalPostgresTest {
     private void fun08Persistencia() {
         AppContext reiniciado = new AppContext();
         check(reiniciado.esPostgresql(), "El contexto reiniciado no es PostgreSQL");
+        reiniciado.getAuthService().login(usuarioEstad, CLAVE_ESTAD);
         check(reiniciado.getInformeService().buscarPorId(idInforme) != null,
                 "El informe no persistió tras reconstruir el contexto");
+    }
+
+    private void entrar(String usuario, String clave) {
+        contexto.getAuthService().login(usuario, clave);
     }
 
     // -------------------------------------------------------------------------

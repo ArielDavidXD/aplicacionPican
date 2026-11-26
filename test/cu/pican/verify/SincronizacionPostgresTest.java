@@ -1,12 +1,12 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.Rol;
-import cu.pican.sync.SyncArchivo;
-import cu.pican.sync.SyncException;
-import cu.pican.sync.SyncJson;
-import cu.pican.sync.SyncModelo.ResultadoImportacion;
-import cu.pican.sync.SyncService;
+import cu.pican.controller.sync.SyncArchivo;
+import cu.pican.controller.sync.SyncException;
+import cu.pican.controller.sync.SyncJson;
+import cu.pican.controller.sync.SyncModelo.ResultadoImportacion;
+import cu.pican.controller.sync.SyncService;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

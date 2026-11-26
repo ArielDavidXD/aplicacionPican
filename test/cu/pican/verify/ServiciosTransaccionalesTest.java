@@ -8,29 +8,29 @@ import cu.pican.model.Recepcion;
 import cu.pican.model.UEB;
 import cu.pican.model.Usuario;
 import cu.pican.model.ValeEntrega;
-import cu.pican.persistence.DatabaseConfig;
-import cu.pican.persistence.JdbcConnectionManager;
-import cu.pican.persistence.JdbcTransactionManager;
-import cu.pican.persistence.MigrationRunner;
-import cu.pican.persistence.TransactionManager;
-import cu.pican.repository.RecepcionRepository;
-import cu.pican.repository.jdbc.DestinoRepositoryPostgres;
-import cu.pican.repository.jdbc.IncidenciaRepositoryPostgres;
-import cu.pican.repository.jdbc.ProductoDestinoRepositoryPostgres;
-import cu.pican.repository.jdbc.ProductoRepositoryPostgres;
-import cu.pican.repository.jdbc.RecepcionRepositoryPostgres;
-import cu.pican.repository.jdbc.UEBRepositoryPostgres;
-import cu.pican.repository.jdbc.UsuarioRepositoryPostgres;
-import cu.pican.repository.jdbc.ValeEntregaRepositoryPostgres;
-import cu.pican.service.DestinoService;
-import cu.pican.service.IncidenciaService;
-import cu.pican.service.PasswordHasher;
-import cu.pican.service.ProductoDestinoService;
-import cu.pican.service.ProductoService;
-import cu.pican.service.RecepcionService;
-import cu.pican.service.UEBService;
-import cu.pican.service.UsuarioService;
-import cu.pican.service.ValeEntregaService;
+import cu.pican.model.persistence.DatabaseConfig;
+import cu.pican.model.persistence.JdbcConnectionManager;
+import cu.pican.model.persistence.JdbcTransactionManager;
+import cu.pican.model.persistence.MigrationRunner;
+import cu.pican.model.persistence.TransactionManager;
+import cu.pican.model.repository.RecepcionRepository;
+import cu.pican.model.repository.jdbc.DestinoRepositoryPostgres;
+import cu.pican.model.repository.jdbc.IncidenciaRepositoryPostgres;
+import cu.pican.model.repository.jdbc.ProductoDestinoRepositoryPostgres;
+import cu.pican.model.repository.jdbc.ProductoRepositoryPostgres;
+import cu.pican.model.repository.jdbc.RecepcionRepositoryPostgres;
+import cu.pican.model.repository.jdbc.UEBRepositoryPostgres;
+import cu.pican.model.repository.jdbc.UsuarioRepositoryPostgres;
+import cu.pican.model.repository.jdbc.ValeEntregaRepositoryPostgres;
+import cu.pican.controller.service.DestinoService;
+import cu.pican.controller.service.IncidenciaService;
+import cu.pican.controller.service.PasswordHasher;
+import cu.pican.controller.service.ProductoDestinoService;
+import cu.pican.controller.service.ProductoService;
+import cu.pican.controller.service.RecepcionService;
+import cu.pican.controller.service.UEBService;
+import cu.pican.controller.service.UsuarioService;
+import cu.pican.controller.service.ValeEntregaService;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
@@ -73,7 +73,7 @@ public final class ServiciosTransaccionalesTest {
     private UsuarioService usuarioService;
 
     public static void main(String[] args) {
-        cu.pican.app.AutorizacionDemo.instalarTodosLosRoles();
+        cu.pican.controller.app.AutorizacionDemo.instalarTodosLosRoles();
         int salida;
         try {
             salida = new ServiciosTransaccionalesTest().ejecutarTodo();
@@ -240,7 +240,7 @@ public final class ServiciosTransaccionalesTest {
         try {
             incidenciaService.cerrar(idIncidencia, LocalDateTime.now(), "Segundo cierre no permitido");
             throw new AssertionError("Se esperaba rechazo de la regla de negocio");
-        } catch (cu.pican.service.ValidacionException esperada) {
+        } catch (cu.pican.controller.service.ValidacionException esperada) {
             check(esperada.getMessage().contains("no se pueden reabrir"),
                     "Mensaje inesperado: " + esperada.getMessage());
         }
@@ -394,6 +394,7 @@ public final class ServiciosTransaccionalesTest {
         String[] sentencias = {
                 "DELETE FROM incidencia WHERE id_vale IN (SELECT id_vale FROM vale_entrega WHERE id_ueb IN (SELECT id_ueb FROM ueb WHERE codigo LIKE '" + PREFIJO + "%'))",
                 "DELETE FROM recepcion WHERE id_vale IN (SELECT id_vale FROM vale_entrega WHERE id_ueb IN (SELECT id_ueb FROM ueb WHERE codigo LIKE '" + PREFIJO + "%'))",
+                "DELETE FROM vale_secuencia WHERE id_ueb IN (SELECT id_ueb FROM ueb WHERE codigo LIKE '" + PREFIJO + "%')",
                 "DELETE FROM vale_entrega WHERE id_ueb IN (SELECT id_ueb FROM ueb WHERE codigo LIKE '" + PREFIJO + "%')",
                 "DELETE FROM producto_destino WHERE id_producto IN (SELECT id_producto FROM producto WHERE codigo LIKE '" + PREFIJO + "%')",
                 "DELETE FROM producto WHERE codigo LIKE '" + PREFIJO + "%'",

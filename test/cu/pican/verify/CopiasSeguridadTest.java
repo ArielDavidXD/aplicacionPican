@@ -1,29 +1,29 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
-import cu.pican.backup.BackupArchivo;
-import cu.pican.backup.EstadoEsquema;
-import cu.pican.backup.InformacionCopia;
-import cu.pican.backup.ManifiestoCopia;
-import cu.pican.backup.PgBackupOperations;
-import cu.pican.backup.ResultadoCopia;
-import cu.pican.backup.ResultadoRestauracion;
-import cu.pican.backup.VersionAplicacion;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.backup.BackupArchivo;
+import cu.pican.controller.backup.EstadoEsquema;
+import cu.pican.controller.backup.InformacionCopia;
+import cu.pican.controller.backup.ManifiestoCopia;
+import cu.pican.controller.backup.PgBackupOperations;
+import cu.pican.controller.backup.ResultadoCopia;
+import cu.pican.controller.backup.ResultadoRestauracion;
+import cu.pican.controller.backup.VersionAplicacion;
 import cu.pican.model.BackupAuditoria;
 import cu.pican.model.Rol;
 import cu.pican.model.Usuario;
-import cu.pican.persistence.DatabaseConfig;
-import cu.pican.persistence.JdbcConnectionManager;
-import cu.pican.persistence.JdbcSupport;
-import cu.pican.repository.memory.BackupAuditoriaRepositoryMemory;
-import cu.pican.repository.memory.ControlRestauracionRepositoryMemory;
-import cu.pican.service.AutorizacionException;
-import cu.pican.service.AutorizacionService;
-import cu.pican.service.BackupService;
-import cu.pican.service.CasoUso;
-import cu.pican.service.SesionAutorizacionProvider;
-import cu.pican.sync.SyncException;
-import cu.pican.sync.SyncService;
+import cu.pican.model.persistence.DatabaseConfig;
+import cu.pican.model.persistence.JdbcConnectionManager;
+import cu.pican.model.persistence.JdbcSupport;
+import cu.pican.model.repository.memory.BackupAuditoriaRepositoryMemory;
+import cu.pican.model.repository.memory.ControlRestauracionRepositoryMemory;
+import cu.pican.controller.service.AutorizacionException;
+import cu.pican.controller.service.AutorizacionService;
+import cu.pican.controller.service.BackupService;
+import cu.pican.controller.service.CasoUso;
+import cu.pican.controller.service.SesionAutorizacionProvider;
+import cu.pican.controller.sync.SyncException;
+import cu.pican.controller.sync.SyncService;
 import cu.pican.view.PermisosInterfaz;
 
 import java.nio.charset.StandardCharsets;
@@ -298,7 +298,7 @@ public final class CopiasSeguridadTest {
 
         verificar("SIN-13-01", "Tras restaurar en UEB LOCAL se bloquea la emission de vales",
                 () -> rechaza(() -> contexto.getValeEntregaService().emitir(null),
-                        cu.pican.service.ValidacionException.class));
+                        cu.pican.controller.service.ValidacionException.class));
 
         verificar("SIN-13-02", "Tras restaurar en UEB LOCAL se bloquea la generacion de paquetes", () -> {
             SyncService sync = contexto.getSyncService();
@@ -321,7 +321,7 @@ public final class CopiasSeguridadTest {
                     BackupAuditoriaRepositoryMemory auditoria = new BackupAuditoriaRepositoryMemory();
                     PgBackupOperations falsas = new OperacionesFalsas();
                     BackupService servicio = new BackupService(contexto.getConfig(), contexto.getConexiones(),
-                            falsas, new cu.pican.backup.VerificadorDestinoSistema(), auditoria, control);
+                            falsas, new cu.pican.controller.backup.VerificadorDestinoSistema(), auditoria, control);
                     SesionPrueba sesion = new SesionPrueba(admin());
                     AutorizacionService autoridad = new AutorizacionService(sesion);
                     servicio.setAutorizacion(autoridad);

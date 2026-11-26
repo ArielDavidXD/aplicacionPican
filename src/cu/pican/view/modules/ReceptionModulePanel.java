@@ -1,17 +1,17 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.Destino;
 import cu.pican.model.Producto;
 import cu.pican.model.Recepcion;
 import cu.pican.model.UEB;
 import cu.pican.model.ValeEntrega;
-import cu.pican.service.DestinoService;
-import cu.pican.service.ProductoService;
-import cu.pican.service.RecepcionService;
-import cu.pican.service.UEBService;
-import cu.pican.service.ValeEntregaService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.DestinoService;
+import cu.pican.controller.service.ProductoService;
+import cu.pican.controller.service.RecepcionService;
+import cu.pican.controller.service.UEBService;
+import cu.pican.controller.service.ValeEntregaService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

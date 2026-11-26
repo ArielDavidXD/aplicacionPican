@@ -2,8 +2,8 @@ package cu.pican.view.modules;
 
 import cu.pican.model.Rol;
 import cu.pican.model.Usuario;
-import cu.pican.service.UsuarioService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.UsuarioService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;

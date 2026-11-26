@@ -1,12 +1,12 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
-import cu.pican.app.AutorizacionDemo;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.app.AutorizacionDemo;
 import cu.pican.model.Nave;
 import cu.pican.model.ParteNave;
 import cu.pican.model.UEB;
-import cu.pican.persistence.JdbcSupport;
-import cu.pican.service.AutorizacionService;
+import cu.pican.model.persistence.JdbcSupport;
+import cu.pican.controller.service.AutorizacionService;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -21,9 +21,9 @@ import java.util.UUID;
 /** Utilidades del arnés de sincronización de la Etapa 4.15 (solo pruebas). */
 final class SyncTestSupport {
 
-    static final String HOST = "jdbc:postgresql://127.0.0.1:55432/";
-    static final String USUARIO = "pican_test";
-    static final String CLAVE = "trust_local";
+    static final String HOST = prefijoUrl();
+    static final String USUARIO = System.getProperty("pican.test.user", "postgres");
+    static final String CLAVE = System.getProperty("pican.test.password", System.getenv("PGPASSWORD"));
     static final String CLAVE_ADMIN = "ClaveSync416Admin!";
     static final String CLAVE_JEFE = "ClaveSync415!";
 
@@ -31,6 +31,10 @@ final class SyncTestSupport {
     }
 
     static AppContext contexto(String base) {
+        if (CLAVE == null || CLAVE.isBlank()) {
+            throw new IllegalStateException(
+                    "Defina -Dpican.test.password o PGPASSWORD para la sincronización PostgreSQL.");
+        }
         System.setProperty("pican.persistence", "postgresql");
         System.setProperty("pican.db.url", HOST + base);
         System.setProperty("pican.db.user", USUARIO);
@@ -39,6 +43,15 @@ final class SyncTestSupport {
         System.setProperty("pican.migrations.dir", "sql/migrations");
         System.setProperty("pican.admin.password", CLAVE_ADMIN);
         return new AppContext();
+    }
+
+    private static String prefijoUrl() {
+        String url = System.getProperty("pican.test.url", "jdbc:postgresql://127.0.0.1:5432/pican_sync_test");
+        int separador = url.lastIndexOf('/');
+        if (separador < "jdbc:postgresql://".length()) {
+            throw new IllegalStateException("La URL de prueba PostgreSQL no es válida: " + url);
+        }
+        return url.substring(0, separador + 1);
     }
 
     /** Alta de cuentas bajo CU-16; deja la sesión cerrada para no alterar al llamador. */

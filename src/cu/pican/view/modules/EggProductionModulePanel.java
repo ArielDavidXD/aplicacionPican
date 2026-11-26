@@ -1,13 +1,13 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.Nave;
 import cu.pican.model.ParteNave;
 import cu.pican.model.UEB;
-import cu.pican.service.NaveService;
-import cu.pican.service.ParteNaveService;
-import cu.pican.service.UEBService;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.NaveService;
+import cu.pican.controller.service.ParteNaveService;
+import cu.pican.controller.service.UEBService;
+import cu.pican.controller.service.ValidacionException;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.DataTablePanel;
 import cu.pican.view.components.MessageHelper;
@@ -15,6 +15,7 @@ import cu.pican.view.components.ModuleHeader;
 import cu.pican.view.components.UITheme;
 
 import javax.swing.BorderFactory;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -68,6 +69,7 @@ public class EggProductionModulePanel extends JPanel {
     private final JTextField gallinasEnfermasField = new JTextField(8);
     private final JTextField huevosProducidosField = new JTextField(8);
     private final JTextField huevosRotosField = new JTextField(8);
+    private final JCheckBox advertenciaRevisadaCheck = new JCheckBox("Advertencia de huevos/gallinas revisada");
     private final JTextField piensoKgField = new JTextField(8);
     private final JTextArea observacionesArea = new JTextArea(3, 30);
 
@@ -165,6 +167,12 @@ public class EggProductionModulePanel extends JPanel {
         c.gridx = 3; form.add(huevosRotosField, c);
 
         row++;
+        c.gridwidth = 1;
+        c.gridx = 1; c.gridy = row; c.gridwidth = 5; c.anchor = GridBagConstraints.WEST;
+        form.add(advertenciaRevisadaCheck, c);
+
+        row++;
+        c.gridwidth = 1;
         c.gridx = 0; c.gridy = row; c.anchor = GridBagConstraints.NORTHWEST;
         form.add(new JLabel("Observaciones:"), c);
         c.gridx = 1; c.gridwidth = 5; c.fill = GridBagConstraints.HORIZONTAL; c.weightx = 1.0;
@@ -293,7 +301,12 @@ public class EggProductionModulePanel extends JPanel {
                             + ").\nEl sistema lo permite, pero confirme que el dato es correcto.",
                     "Aviso: huevos producidos superan gallinas vivas",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
-            return opcion == JOptionPane.OK_OPTION;
+            if (opcion == JOptionPane.OK_OPTION) {
+                parte.setAdvertenciaRevisada(true);
+                advertenciaRevisadaCheck.setSelected(true);
+                return true;
+            }
+            return false;
         }
         return true;
     }
@@ -311,6 +324,7 @@ public class EggProductionModulePanel extends JPanel {
         parte.setPiensoKg(parseBigDecimal(piensoKgField.getText(), "Pienso (kg)"));
         String obs = observacionesArea.getText();
         parte.setObservaciones(obs != null && !obs.trim().isEmpty() ? obs.trim() : null);
+        parte.setAdvertenciaRevisada(advertenciaRevisadaCheck.isSelected());
         parte.setEstado(estado);
         parte.setCreadoEn(LocalDateTime.now());
         parte.setVersion(1L);
@@ -360,6 +374,7 @@ public class EggProductionModulePanel extends JPanel {
         huevosRotosField.setText(toText(parte.getHuevosRotos()));
         piensoKgField.setText(toText(parte.getPiensoKg()));
         observacionesArea.setText(parte.getObservaciones() != null ? parte.getObservaciones() : "");
+        advertenciaRevisadaCheck.setSelected(parte.isAdvertenciaRevisada());
     }
 
     private void limpiarFormulario() {
@@ -375,6 +390,7 @@ public class EggProductionModulePanel extends JPanel {
         huevosRotosField.setText("");
         piensoKgField.setText("");
         observacionesArea.setText("");
+        advertenciaRevisadaCheck.setSelected(false);
         tablePanel.getTable().clearSelection();
     }
 

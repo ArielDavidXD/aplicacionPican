@@ -15,8 +15,12 @@ import java.util.UUID;
  */
 public class ParteUnidadAsociada {
 
+    public static final String ESTADO_BORRADOR = "BORRADOR";
+    public static final String ESTADO_REGISTRADO = "REGISTRADO";
+
     private UUID idParteAsociado;
     private UUID idUnidad;
+    private UUID idUEB;
     private LocalDate fechaProduccion;
     private String referenciaPapel;
     private String observaciones;
@@ -42,6 +46,14 @@ public class ParteUnidadAsociada {
 
     public void setIdUnidad(UUID idUnidad) {
         this.idUnidad = idUnidad;
+    }
+
+    public UUID getIdUEB() {
+        return idUEB;
+    }
+
+    public void setIdUEB(UUID idUEB) {
+        this.idUEB = idUEB;
     }
 
     public LocalDate getFechaProduccion() {

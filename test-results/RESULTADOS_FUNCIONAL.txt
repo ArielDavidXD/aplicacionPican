@@ -3,15 +3,15 @@ INFORME FUNCIONAL POSTGRESQL · ETAPA 4.14 · FASE 4
 APROBADA | FUN-01
   Esperado: UUID, códigos y baja lógica de UEB/nave/unidad con JDBC
   Obtenido: Se cumplió el resultado esperado
-APROBADA | FUN-02
+FALLIDA | FUN-02
   Esperado: Parte de nave se consulta en análisis con su cantidad exacta
-  Obtenido: Se cumplió el resultado esperado
+  Obtenido: ValidacionException: Debe revisar y confirmar el aviso de huevos producidos superiores a gallinas vivas.
 APROBADA | FUN-03
   Esperado: Producción de carne y consolidado se consultan por período
   Obtenido: Se cumplió el resultado esperado
-APROBADA | FUN-04
+FALLIDA | FUN-04
   Esperado: Referencias históricas y metas oficiales disponibles solo para lectura
-  Obtenido: Se cumplió el resultado esperado
+  Obtenido: ValidacionException: El indicador no pertenece al catálogo oficial de la tabla y año seleccionados.
 APROBADA | FUN-05
   Esperado: Informe: fuente, decisión y entrega con transiciones de estado
   Obtenido: Se cumplió el resultado esperado

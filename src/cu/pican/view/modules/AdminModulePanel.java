@@ -1,6 +1,6 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.view.components.ModuleHeader;
 import cu.pican.view.components.UITheme;
 
@@ -39,6 +39,8 @@ public class AdminModulePanel extends JPanel {
         tabs.addTab("Productos", new ProductoAdminPanel(context.getProductoService()));
         tabs.addTab("Destinos", new DestinoAdminPanel(context.getDestinoService()));
         tabs.addTab("Relaciones producto-destino", productoDestinoPanel);
+        tabs.addTab("Referencias oficiales",
+                new ReferenciasOficialesAdminPanel(context.getGestionReferenciasService()));
         tabs.addTab("Importar datos", new ImportacionAdminPanel(context));
         tabs.addTab("Copias de seguridad", new CopiasSeguridadPanel(context));
 

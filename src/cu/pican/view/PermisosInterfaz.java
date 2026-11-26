@@ -1,6 +1,6 @@
 package cu.pican.view;
 
-import cu.pican.service.CasoUso;
+import cu.pican.controller.service.CasoUso;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -40,6 +40,10 @@ public final class PermisosInterfaz {
             Set<String> roles = new LinkedHashSet<>();
             for (CasoUso caso : entry.getValue()) {
                 roles.addAll(caso.getRolesPermitidos());
+                // Leer un catálogo no concede acceso al módulo administrativo completo.
+                if (!"administracion".equals(entry.getKey())) {
+                    roles.addAll(caso.getRolesLectura());
+                }
             }
             if ("inicio".equals(entry.getKey())) {
                 roles.add("ADMINISTRADOR");

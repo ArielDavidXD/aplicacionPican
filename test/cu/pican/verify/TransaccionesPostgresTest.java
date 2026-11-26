@@ -2,15 +2,15 @@ package cu.pican.verify;
 
 import cu.pican.model.Nave;
 import cu.pican.model.UEB;
-import cu.pican.persistence.DatabaseConfig;
-import cu.pican.persistence.JdbcConnectionManager;
-import cu.pican.persistence.JdbcSupport;
-import cu.pican.persistence.JdbcTransactionManager;
-import cu.pican.persistence.MigrationRunner;
-import cu.pican.persistence.PersistenciaException;
-import cu.pican.persistence.TransactionManager;
-import cu.pican.repository.jdbc.NaveRepositoryPostgres;
-import cu.pican.repository.jdbc.UEBRepositoryPostgres;
+import cu.pican.model.persistence.DatabaseConfig;
+import cu.pican.model.persistence.JdbcConnectionManager;
+import cu.pican.model.persistence.JdbcSupport;
+import cu.pican.model.persistence.JdbcTransactionManager;
+import cu.pican.model.persistence.MigrationRunner;
+import cu.pican.model.persistence.PersistenciaException;
+import cu.pican.model.persistence.TransactionManager;
+import cu.pican.model.repository.jdbc.NaveRepositoryPostgres;
+import cu.pican.model.repository.jdbc.UEBRepositoryPostgres;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -52,7 +52,7 @@ public final class TransaccionesPostgresTest {
     private NaveRepositoryPostgres naves;
 
     public static void main(String[] args) {
-        cu.pican.app.AutorizacionDemo.instalarTodosLosRoles();
+        cu.pican.controller.app.AutorizacionDemo.instalarTodosLosRoles();
         int codigoSalida;
         try {
             codigoSalida = new TransaccionesPostgresTest().ejecutarTodo();

@@ -1,12 +1,12 @@
 package cu.pican.view.modules;
 
-import cu.pican.app.AppContext;
-import cu.pican.backup.InformacionCopia;
-import cu.pican.backup.ResultadoCopia;
-import cu.pican.backup.ResultadoRestauracion;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.backup.InformacionCopia;
+import cu.pican.controller.backup.ResultadoCopia;
+import cu.pican.controller.backup.ResultadoRestauracion;
 import cu.pican.model.BackupAuditoria;
 import cu.pican.model.Rol;
-import cu.pican.service.BackupService;
+import cu.pican.controller.service.BackupService;
 import cu.pican.view.components.AppButton;
 import cu.pican.view.components.MessageHelper;
 import cu.pican.view.components.UITheme;

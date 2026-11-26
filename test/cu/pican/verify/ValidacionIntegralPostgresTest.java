@@ -1,6 +1,6 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
+import cu.pican.controller.app.AppContext;
 import cu.pican.model.ConsolidadoUEB;
 import cu.pican.model.Destino;
 import cu.pican.model.Incidencia;
@@ -11,11 +11,12 @@ import cu.pican.model.Producto;
 import cu.pican.model.ProductoDestino;
 import cu.pican.model.ProduccionCarne;
 import cu.pican.model.Recepcion;
+import cu.pican.model.TablaHistorica;
 import cu.pican.model.TipoFuenteInforme;
 import cu.pican.model.UEB;
 import cu.pican.model.UnidadAsociada;
 import cu.pican.model.ValeEntrega;
-import cu.pican.service.ValidacionException;
+import cu.pican.controller.service.ValidacionException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -272,6 +273,13 @@ public final class ValidacionIntegralPostgresTest {
         });
 
         verificar("INT-16", "Análisis e indicadores", () -> {
+            // Las referencias oficiales arrancan vacías: el administrador las carga por CU-18.
+            entrar(usuarioAdmin, CLAVE_ADMIN);
+            String sufijoRef = UUID.randomUUID().toString().substring(0, 8);
+            contexto.getGestionReferenciasService().registrarIndicador(TablaHistorica.INFRAESTRUCTURA,
+                    "Referencia INT " + sufijoRef, 2019, new BigDecimal("1"), "U", "Prueba INT-16");
+            contexto.getGestionReferenciasService().registrarMeta("Meta huevos INT " + sufijoRef,
+                    new BigDecimal("1"), new BigDecimal("2"), null, "U", "Prueba INT-16");
             entrar(usuarioEstad, CLAVE_ESTAD);
             check(!contexto.getAnalisisService().consultarTodasLasReferencias().isEmpty(),
                     "No hay referencias históricas oficiales");
@@ -353,7 +361,7 @@ public final class ValidacionIntegralPostgresTest {
 
     private int contarMigraciones() throws Exception {
         Connection conexion = contexto.getConexiones().obtenerConexion();
-        boolean cerrar = conexion != cu.pican.persistence.JdbcSupport.conexionActiva();
+        boolean cerrar = conexion != cu.pican.model.persistence.JdbcSupport.conexionActiva();
         try (Statement st = conexion.createStatement();
              ResultSet rs = st.executeQuery("SELECT count(*) FROM pican_schema_migrations WHERE exito = TRUE")) {
             rs.next();
@@ -367,7 +375,7 @@ public final class ValidacionIntegralPostgresTest {
 
     private boolean metadatosNaveBaja(UUID idNaveBaja) throws Exception {
         Connection conexion = contexto.getConexiones().obtenerConexion();
-        boolean cerrar = conexion != cu.pican.persistence.JdbcSupport.conexionActiva();
+        boolean cerrar = conexion != cu.pican.model.persistence.JdbcSupport.conexionActiva();
         String sql = "SELECT version, creado_en, actualizado_en, activa, eliminado_logico FROM nave WHERE id_nave = ?";
         try (PreparedStatement ps = conexion.prepareStatement(sql)) {
             ps.setObject(1, idNaveBaja.toString(), java.sql.Types.OTHER);

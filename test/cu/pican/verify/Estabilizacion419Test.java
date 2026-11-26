@@ -1,19 +1,19 @@
 package cu.pican.verify;
 
-import cu.pican.app.AppContext;
-import cu.pican.app.UsuarioInicialInitializer;
+import cu.pican.controller.app.AppContext;
+import cu.pican.controller.app.UsuarioInicialInitializer;
 import cu.pican.model.Rol;
 import cu.pican.model.Usuario;
-import cu.pican.repository.memory.UsuarioRepositoryMemory;
-import cu.pican.service.AutorizacionService;
-import cu.pican.service.PasswordHasher;
-import cu.pican.service.SesionAutorizacionProvider;
-import cu.pican.service.UsuarioService;
-import cu.pican.service.ValidacionException;
-import cu.pican.sync.SyncArchivo;
-import cu.pican.sync.SyncJson;
-import cu.pican.sync.SyncModelo;
-import cu.pican.sync.SyncService;
+import cu.pican.model.repository.memory.UsuarioRepositoryMemory;
+import cu.pican.controller.service.AutorizacionService;
+import cu.pican.controller.service.PasswordHasher;
+import cu.pican.controller.service.SesionAutorizacionProvider;
+import cu.pican.controller.service.UsuarioService;
+import cu.pican.controller.service.ValidacionException;
+import cu.pican.controller.sync.SyncArchivo;
+import cu.pican.controller.sync.SyncJson;
+import cu.pican.controller.sync.SyncModelo;
+import cu.pican.controller.sync.SyncService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
